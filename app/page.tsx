@@ -34,7 +34,9 @@ import {
   computePredictions,
   getPredictionPointColor,
   getStablePointPosition,
-  getPredictionLegend
+  getPredictionLegend,
+  getRecordIndicator as getRecordIndicatorLib,
+  getMinRecordThreshold
 } from "../src/lib"
 import { AddFeedingPanel } from "../src/components/AddFeedingPanel"
 import { TodayAndSmartCards } from "../src/components/TodayAndSmartCards"
@@ -47,6 +49,10 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PredictionInfoDialog } from "../src/components/PredictionInfoDialog"
+import { MonthlyRecords } from "../src/components/MonthlyRecords"
+import { AppHeader } from "../src/components/AppHeader"
+import { calculateBabyAgeWeeksFromBirthDate, formatBabyAgeFromBirthDate, getUserIdSafelyFromState } from "../src/lib"
+import { DeleteConfirmDialog } from "../src/components/DeleteConfirmDialog"
 import {
   ResponsiveContainer,
   LineChart,
@@ -165,69 +171,13 @@ export default function FoodTracker() {
   }
 
   // Helper robuste: récupère un userId en priorité override > état > localStorage
-  const getUserIdSafely = (override?: string) => {
-    if (override && override.length > 0) return override
-    if (currentUserId && currentUserId.length > 0) return currentUserId
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('diaper-user-id')
-      if (stored && stored.length > 0) return stored
-    }
-    return ''
-  }
+  const getUserIdSafely = (override?: string) => getUserIdSafelyFromState(currentUserId, override)
 
-  // Calculate baby age in weeks
-  const calculateBabyAgeWeeks = () => {
-    const user = getCurrentUserInfo()
-    if (!user || !user.babyBirthDate) return 0
-    
-    const birthDate = new Date(user.babyBirthDate)
-    const today = new Date()
-    const diffTime = Math.abs(today.getTime() - birthDate.getTime())
-    const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7))
-    
-    return diffWeeks
-  }
+  // Calculate baby age in weeks (via lib)
+  const calculateBabyAgeWeeks = () => calculateBabyAgeWeeksFromBirthDate(babyBirthDate)
 
   // Format baby age with detailed weeks/months display (compatible with existing UI)
-  const formatBabyAge = () => {
-    const birthDate = getBabyBirthDate()
-    if (!birthDate) return "Age undefined"
-    
-    const now = new Date()
-    const diffMs = now.getTime() - birthDate.getTime()
-
-    if (diffMs < 0) {
-      const diffDays = Math.ceil(-diffMs / (1000 * 60 * 60 * 24))
-      return `Born ${diffDays} day${diffDays > 1 ? "s" : ""} ago`
-    }
-
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-    if (diffDays < 30) {
-      const weeks = Math.floor(diffDays / 7)
-      const remainingDays = diffDays % 7
-      if (remainingDays === 0) {
-        return `${weeks} semaine${weeks > 1 ? "s" : ""}`
-      } else {
-        return `${weeks} week${weeks > 1 ? "s" : ""} ${remainingDays} day${remainingDays > 1 ? "s" : ""}`
-      }
-    }
-
-    // Calcul en mois et semaines
-    const months = Math.floor(diffDays / 30.44)
-    const remainingDaysAfterMonths = diffDays % 30.44
-    const weeksAfterMonths = Math.floor(remainingDaysAfterMonths / 7)
-
-    const remainingDaysAfterWeeks = Math.floor(remainingDaysAfterMonths % 7)
-    
-    if (weeksAfterMonths === 0 && remainingDaysAfterWeeks === 0) {
-      return `${months} month${months > 1 ? "s" : ""}`
-    } else if (remainingDaysAfterWeeks === 0) {
-      return `${months} month${months > 1 ? "s" : ""} ${weeksAfterMonths} week${weeksAfterMonths > 1 ? "s" : ""}`
-    } else {
-      return `${months} month${months > 1 ? "s" : ""} ${weeksAfterMonths} week${weeksAfterMonths > 1 ? "s" : ""} ${remainingDaysAfterWeeks} day${remainingDaysAfterWeeks > 1 ? "s" : ""}`
-    }
-  }
+  const formatBabyAge = () => formatBabyAgeFromBirthDate(babyBirthDate)
 
   // Détection automatique jour/nuit avec paramètre d'URL
   const isNightTime = () => {
@@ -1155,7 +1105,7 @@ export default function FoodTracker() {
         
         if (existingRecords.length === 0) {
           // Premier record : utiliser le seuil adaptatif
-          const minRecordThreshold = getMinRecordThreshold()
+          const minRecordThreshold = getMinRecordThreshold(calculateBabyAgeWeeks())
           if (currentInterval >= minRecordThreshold) {
             recordType = "bronze"
             oldRecord = 0
@@ -1750,12 +1700,7 @@ export default function FoodTracker() {
   const t = useCallback((key: string) => I18N[currentLocale]?.[key as keyof typeof I18N[typeof currentLocale]] ?? key, [I18N, currentLocale])
 
   // Fonction helper pour le seuil minimum des records selon l'âge - Mémorisée
-  const getMinRecordThreshold = useCallback(() => {
-    const babyAge = calculateBabyAgeWeeks()
-    if (babyAge < 4) return 30 // Nouveau-né
-    if (babyAge < 12) return 45 // Petit bébé
-    return 60 // Bébé plus âgé
-  }, [])
+  // Seuils déplacés en lib si besoin ultérieur
 
   // Fonction helper pour valider la cohérence des records
   // Mémoisation du côté suggéré (déjà optimisé plus haut)
@@ -1763,20 +1708,7 @@ export default function FoodTracker() {
 
   // Mémoisation des indicateurs de records
   const getRecordIndicator = useCallback(
-    (log: FoodLogWithInterval) => {
-    if (!log.intervalMinutes || log.intervalMinutes <= 0) return null
-    const d = new Date(log.timestamp)
-    const isNight = d.getHours() >= 22 || d.getHours() < 7
-    const relevant = isNight ? records.night : records.day
-    if (relevant.length === 0) return null
-    const recordIndex = relevant.findIndex(
-      (r: ProcessedIntervalData) => r.timestamp === log.timestamp && r.interval === log.intervalMinutes,
-    )
-    if (recordIndex === -1) return null
-    const timeEmoji = isNight ? "🌙" : "☀️"
-    const rankEmoji = ["🥇", "🥈", "🥉"][recordIndex] || ""
-    return timeEmoji + rankEmoji
-    },
+    (log: FoodLogWithInterval) => getRecordIndicatorLib(log, records),
     [records],
   )
 
@@ -1911,74 +1843,22 @@ export default function FoodTracker() {
       </Dialog>
 
       {/* Modal delete confirm */}
-      <Dialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Trash2 className="h-5 w-5 text-red-500" />
-              Confirm deletion
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this feeding? This action is irreversible.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button onClick={() => setDeleteConfirmId(null)} variant="outline">
-              Cancel
-            </Button>
-            <Button
-              onClick={() => deleteConfirmId && confirmDelete(deleteConfirmId)}
-              variant="destructive"
-              disabled={submitting}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              {submitting ? "Deleting..." : "Delete"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DeleteConfirmDialog
+        open={deleteConfirmId !== null}
+        submitting={submitting}
+        onCancel={() => setDeleteConfirmId(null)}
+        onConfirm={() => deleteConfirmId && confirmDelete(deleteConfirmId)}
+      />
 
       {/* Header */}
-      <div className="text-center space-y-2">
-        <div className="relative">
-          <div className="flex items-center justify-center">
-            <h1 data-testid="page-title" className="text-3xl font-bold flex items-center gap-2">
-              <img src="/logo_app.png" alt="Logo" className="h-8 w-8" />
-              {t('pageTitle')}
-            </h1>
-          </div>
-          <div className="absolute top-0 left-0">
-            <Button 
-              onClick={() => setIsDarkMode(!isDarkMode)} 
-              variant="outline" 
-              size="sm" 
-              className="px-2 sm:px-3 bg-transparent"
-              title={isDarkMode ? "Passer en mode clair" : "Passer en mode sombre"}
-            >
-              {isDarkMode ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : <Moon className="h-3 w-3 sm:h-4 sm:w-4" />}
-            </Button>
-          </div>
-          <div className="absolute top-0 right-0 flex items-center gap-1 sm:gap-2">
-            <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline">Connected: {currentUser}</span>
-            <Button onClick={handleLogout} variant="outline" size="sm" className="px-2 sm:px-3 bg-transparent">
-              <LogOut className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Logout</span>
-            </Button>
-          </div>
-        </div>
-        <div className="flex items-center justify-center">
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
-            isDarkMode 
-              ? "bg-blue-900/20" 
-              : "bg-blue-50/80"
-          }`}>
-            <span className="text-sm">👶</span>
-            <span className={`text-xs font-medium ${
-              isDarkMode ? "text-blue-400" : "text-blue-600"
-            }`}>{formatBabyAge()}</span>
-          </div>
-        </div>
-      </div>
+      <AppHeader
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        formatBabyAge={formatBabyAge}
+        title={t('pageTitle')}
+      />
 
       {/* Alerts */}
       {error && (
@@ -2802,111 +2682,11 @@ export default function FoodTracker() {
         </Card>
 
       {/* Records */}
-      <Card className={`gap-2 ${isDarkMode ? "bg-[#2a2a2a] border-gray-700" : "bg-white border-gray-200"}`}>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2">
-            <Trophy className="h-5 w-5" />
-            Monthly records
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 pt-1 pb-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Day Records */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm">☀️</span>
-                <span className="text-sm font-medium text-amber-600">Day</span>
-              </div>
-              <div className="space-y-2">
-                {records.day.length > 0 ? (
-                  records.day.map((r: any, i: number) => (
-                    <div 
-                      key={`day-${i}`} 
-                      className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-                        i === 0 
-                          ? isDarkMode 
-                            ? "bg-gradient-to-r from-yellow-500/10 to-yellow-500/5" 
-                            : "bg-gradient-to-r from-yellow-100 to-yellow-50"
-                          : isDarkMode 
-                            ? "bg-gray-700/50 hover:bg-gray-700" 
-                            : "bg-gray-50 hover:bg-gray-100"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg w-6 text-center">
-                          {i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉"}
-                        </span>
-                        <div className="flex items-baseline gap-2">
-                          <span className={`text-sm font-medium ${isDarkMode ? "text-gray-200" : "text-gray-900"}`}>
-                            {r.date}
-                          </span>
-                          <span className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-                            {r.time}
-                          </span>
-                        </div>
-                      </div>
-                      <span className={`text-base font-semibold ${isDarkMode ? "text-gray-100" : "text-gray-900"}`}>
-                        {formatTimeInterval(r.interval)}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-500"} text-center py-4`}>
-                    No day records yet
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Night Records */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm">🌙</span>
-                <span className="text-sm font-medium text-blue-600">Night</span>
-              </div>
-              <div className="space-y-2">
-                {records.night.length > 0 ? (
-                  records.night.map((r: any, i: number) => (
-                    <div 
-                      key={`night-${i}`} 
-                      className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-                        i === 0 
-                          ? isDarkMode 
-                            ? "bg-gradient-to-r from-yellow-500/10 to-yellow-500/5" 
-                            : "bg-gradient-to-r from-yellow-100 to-yellow-50"
-                          : isDarkMode 
-                            ? "bg-gray-700/50 hover:bg-gray-700" 
-                            : "bg-gray-50 hover:bg-gray-100"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg w-6 text-center">
-                          {i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉"}
-                        </span>
-                        <div className="flex items-baseline gap-2">
-                          <span className={`text-sm font-medium ${isDarkMode ? "text-gray-200" : "text-gray-900"}`}>
-                            {r.date}
-                          </span>
-                          <span className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-                            {r.time}
-                          </span>
-                        </div>
-                      </div>
-                      <span className={`text-base font-semibold ${isDarkMode ? "text-gray-100" : "text-gray-900"}`}>
-                        {formatTimeInterval(r.interval)}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-500"} text-center py-4`}>
-                    No night records yet
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <MonthlyRecords
+        isDarkMode={isDarkMode}
+        records={records as any}
+        formatTimeInterval={formatTimeInterval}
+      />
 
       {/* Table récentes */}
       <RecentFeedingsTable
@@ -2935,8 +2715,8 @@ export default function FoodTracker() {
         totalLogsCount={totalLogsCount}
         calculateBabyAgeWeeks={calculateBabyAgeWeeks}
       />
-      </div>
-    </div>
+            </div>
+            </div>
     </HydrationWrapper>
   )
 }

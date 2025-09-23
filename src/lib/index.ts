@@ -11,3 +11,5 @@ export * from './constants'
 // Fonctions utilitaires
 export * from './utils'
 export * from './predictions'
+export * from './records'
+export * from './user'
