@@ -1,13 +1,52 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
+import { HydrationWrapper } from "../src/components/HydrationWrapper"
 import { createClient } from "@supabase/supabase-js"
+import {
+  // Types
+  type User,
+  type FoodLog,
+  type FoodLogWithInterval,
+  type RecordBroken,
+  type DailyStatsData,
+  type IntervalChartData,
+  type WeeklyMedianData,
+  type Last7DaysData,
+  type ApproachingRecord,
+  type SmartAlerts,
+  type ProcessedIntervalData,
+  // Constantes
+  sideLabels,
+  sideColors,
+  // Utilitaires
+  roundToStep,
+  sideBadgeVariant,
+  formatTimeInterval,
+  formatYAxisInterval,
+  formatDate,
+  formatTime,
+  getYAxisTicks,
+  getEvolutionYDomain,
+  getXAxisTicks,
+  calculateInterval,
+  
+  computePredictions,
+  getPredictionPointColor,
+  getStablePointPosition,
+  getPredictionLegend
+} from "../src/lib"
+import { AddFeedingPanel } from "../src/components/AddFeedingPanel"
+import { TodayAndSmartCards } from "../src/components/TodayAndSmartCards"
+import { fetchLogsWithOptions as fetchLogsWithOptionsSvc, fetchTodayCount as fetchTodayCountSvc, fetchTotalLogsCount as fetchTotalLogsCountSvc, addLogEntry, updateLogTimestamp, deleteLogEntry } from "../src/lib/supabase"
+import { RecentFeedingsTable } from "../src/components/RecentFeedingsTable"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PredictionInfoDialog } from "../src/components/PredictionInfoDialog"
 import {
   ResponsiveContainer,
   LineChart,
@@ -54,353 +93,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey)
 // ===========================
 // Auth simple
 // ===========================
-// User interface
-interface User {
-  id: string
-  username: string
-  password: string
-  babyBirthDate: string // Format: YYYY-MM-DD
-}
-
-
 
 // Les utilisateurs sont maintenant récupérés via l'API route sécurisée
 const USERS: User[] = [];
-
-// ===========================
-// Types
-// ===========================
-interface FoodLog {
-  id: string
-  side: "left" | "right" | "bottle"
-  timestamp: string
-  created_at: string
-}
-
-interface FoodLogWithInterval extends FoodLog {
-  intervalMinutes?: number
-}
-
-interface RecordBroken {
-  type: "day" | "night"
-  recordLevel: "bronze" | "silver" | "gold"
-  newRecord: number
-  oldRecord: number
-  improvement: number
-  beatenRecords: string[] // Tous les records battus ["bronze", "silver"]
-}
-
-// ===========================
-// Types pour les données de graphiques
-// ===========================
-interface DailyStatsData {
-  date: string
-  left: number
-  right: number
-  bottle: number
-  total: number
-  dayKey?: string
-  count?: number
-  totalTime?: number
-  avgInterval?: number
-  isWeekend?: boolean
-}
-interface IntervalChartData {
-  time: string
-  interval: number
-  isNight: boolean
-  // Champs optionnels selon les sources de données
-  count?: number
-  hour?: number
-  timestamp?: string
-  date?: string
-  dateChanged?: boolean
-  fullDate?: Date
-  index?: number
-  numericTime?: number
-  side?: "left" | "right" | "bottle"
-  trendLine?: number
-  originalInterval?: number
-}
-// interface TimelineData {
-//   timestamp: string
-//   side: "left" | "right" | "bottle"
-//   interval?: number
-//   isRecord?: boolean
-//   recordType?: "day" | "night"
-// }
-interface WeeklyMedianData {
-  weekStart: string
-  weekEnd: string
-  weekNumber: string
-  dayMedianInterval: number
-  nightMedianInterval: number
-  dayCount: number
-  nightCount: number
-  dayAvgInterval: number
-  nightAvgInterval: number
-  dayMinInterval: number
-  nightMinInterval: number
-  dayMaxInterval: number
-  nightMaxInterval: number
-  dayCV: number
-  nightCV: number
-  dayStdDev: number
-  nightStdDev: number
-}
-
-interface Last7DaysData {
-  date: string
-  dayMedianInterval: number
-  nightMedianInterval: number
-  dayCount: number
-  nightCount: number
-  dayAvgInterval: number
-  nightAvgInterval: number
-  dayMinInterval: number
-  nightMinInterval: number
-  dayMaxInterval: number
-  nightMaxInterval: number
-  dayCV: number
-  nightCV: number
-  dayStdDev: number
-  nightStdDev: number
-}
-
-interface ApproachingRecord {
-  timeRemaining: number
-  isNight: boolean
-  recordInterval: number
-  nextRecordRank: string
-  isApproaching: boolean
-  allRecordsBroken: boolean
-  beatenRecords: string[]
-}
-
-interface SmartAlerts {
-  nextFeedingPrediction: number | null
-  sideRecommendation: "left" | "right" | null
-  reliabilityIndex?: number | null
-  isClusterFeeding?: boolean
-}
-
-// ===========================
-// Types pour les fonctions utilitaires
-// ===========================
-interface ProcessedIntervalData {
-  interval: number
-  isNight: boolean
-  timestamp: string
-  date: string
-  time: string
-  side?: "left" | "right" | "bottle"
-  hour?: number
-  dateChanged?: boolean
-  fullDate?: Date
-  index?: number
-  numericTime?: number
-  trendLine?: number
-  originalInterval?: number
-}
-
-// ===========================
-// Libellés & couleurs
-// ===========================
-  const sideLabels = { left: "Left", right: "Right", bottle: "Bottle" }
-  const sideColors = { left: "#ec4899", right: "#8b5cf6", bottle: "#10b981" }
-
-// ===========================
-// Réglages prédiction
-// ===========================
-const PREDICTION = {
-  TIME_WINDOW_HOURS: 72,
-  MAX_INTERVALS: 50,
-  MIN_SAMPLES_PER_SLOT: 3,
-  MIN_SAMPLES_DAY_NIGHT: 8,
-  ENABLE_WEEKEND_SPLIT_AFTER_DAYS: 14,
-  OUTLIER_TRIM_RATIO: 0.20,
-  CLAMP_MIN: 20,
-  CLAMP_MAX: 180,
-} as const
-
-// Largeur de la "fenêtre probable" autour de l'intervalle attendu
-const PROB_WINDOW = {
-  MIN: 30,
-  MAX: 90,
-  FLOOR_RATIO: 0.25,
-  MAD_SCALE: 1.4826,
-} as const
-
-// ===========================
-// Helpers génériques
-// ===========================
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
-const roundToStep = (v: number, step = 5) => Math.round(v / step) * step
-
-const median = (arr: number[]) => {
-  if (arr.length === 0) return 0
-  const s = [...arr].sort((a, b) => a - b)
-  const mid = Math.floor(s.length / 2)
-  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid]
-}
-
-const mad = (arr: number[]) => {
-  if (arr.length === 0) return 0
-  const m = median(arr)
-  const dev = arr.map((x) => Math.abs(x - m))
-  return median(dev)
-}
-
-const trimmedMean = (arr: number[], trimRatio = 0.2) => {
-  if (arr.length === 0) return 0
-  const s = [...arr].sort((a, b) => a - b)
-  const k = Math.floor(trimRatio * s.length)
-  const trimmed = s.slice(k, s.length - k)
-  const base = trimmed.length > 0 ? trimmed : s
-  return base.reduce((a, b) => a + b, 0) / base.length
-}
-
-// ===========================
-// Utilitaires format
-// ===========================
-const sideBadgeVariant = (side: string) => {
-  if (side === "left") return "default"
-  if (side === "right") return "secondary"
-  if (side === "bottle") return "outline"
-  return "secondary"
-}
-const formatTimeInterval = (minutes: number) => {
-  if (minutes < 60) return `${minutes}min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m === 0 ? `${h}h` : `${h}h${m.toString().padStart(2, "0")}`
-}
-
-// Fonction pour formater les axes Y des graphiques d'intervalles
-const formatYAxisInterval = (value: number) => {
-  if (value < 60) return `${value}min`
-  const hours = Math.floor(value / 60)
-  const remainingMinutes = value % 60
-  if (remainingMinutes === 0) return `${hours}h`
-  return `${hours}h${remainingMinutes.toString().padStart(2, "0")}`
-}
-
-// Fonction pour calculer les graduations intermédiaires de l'axe Y
-const getYAxisTicks = (dataMax: number) => {
-  const ticks = [0]
-  
-  if (dataMax <= 60) {
-    // Pour les intervalles courts (< 1h), graduations de 10min
-    for (let i = 10; i <= dataMax; i += 10) {
-      ticks.push(i)
-    }
-  } else if (dataMax <= 180) {
-    // Pour les intervalles moyens (1-3h), graduations de 15min
-    for (let i = 15; i <= dataMax; i += 15) {
-      ticks.push(i)
-    }
-  } else {
-    // Pour les intervalles longs (> 3h), graduations de 30min
-    for (let i = 30; i <= dataMax; i += 30) {
-      ticks.push(i)
-    }
-  }
-  
-  return ticks
-}
-
-// Fonction pour calculer le domaine Y du graphique Evolution avec marge intelligente
-const getEvolutionYDomain = ([dataMin, dataMax]: [number, number]): [number, number] => {
-  // Calculer l'échelle probable basée sur la valeur max
-  let step = 1
-  if (dataMax <= 10) step = 1
-  else if (dataMax <= 20) step = 2
-  else if (dataMax <= 50) step = 5
-  else if (dataMax <= 100) step = 10
-  else step = 20
-  
-  // Si l'échelle est de 4 en 4 ou 5 en 5, ajouter un échelon supplémentaire
-  if (step === 4 || step === 5) {
-    const nextTick = Math.ceil(dataMax / step) * step + step
-    return [0, nextTick] as [number, number]
-  }
-  
-  // Sinon, utiliser la marge standard de 10%
-  return [0, Math.max(dataMax * 1.1, dataMax + 1)] as [number, number]
-}
-
-// Fonction pour générer les graduations X aux heures pleines
-const getXAxisTicks = (data: any[]) => {
-  if (data.length === 0) return []
-  
-  const startTime = Math.min(...data.map((d) => d.numericTime))
-  const endTime = Math.max(...data.map((d) => d.numericTime))
-  
-  const ticks = []
-  
-  // Commencer à la première heure pleine après le début
-  const startDate = new Date(startTime)
-  const firstHour = new Date(startDate)
-  firstHour.setMinutes(0, 0, 0)
-  if (firstHour.getTime() < startTime) {
-    firstHour.setHours(firstHour.getHours() + 1)
-  }
-  
-  // Ajouter des ticks toutes les heures jusqu'à la fin
-  for (let time = firstHour.getTime(); time <= endTime; time += 60 * 60 * 1000) {
-    ticks.push(time)
-  }
-  
-  // Limiter le nombre de ticks pour éviter l'encombrement
-  if (ticks.length > 12) {
-    // Prendre une graduation sur deux
-    return ticks.filter((_, index) => index % 2 === 0)
-  }
-  
-  return ticks
-}
-const formatDate = (d: Date, opts: Intl.DateTimeFormatOptions = {}) => d.toLocaleDateString("en-US", opts)
-const formatTime = (d: Date, opts: Intl.DateTimeFormatOptions = {}) => d.toLocaleTimeString("en-US", opts)
-const calculateInterval = (current: Date, previous: Date) =>
-  Math.round((current.getTime() - previous.getTime()) / (1000 * 60))
-
-const getCurrentTimeSlot = (hour: number) => {
-  if (hour >= 7 && hour < 9) return "7-9"
-  if (hour >= 9 && hour < 12) return "9-12"
-  if (hour >= 12 && hour < 15) return "12-15"
-  if (hour >= 15 && hour < 18) return "15-18"
-  if (hour >= 18 && hour < 21) return "18-21"
-  if (hour >= 21 || hour < 7) return "21-7"
-  return "7-9"
-}
-// const isWeekend = (date: Date) => [0, 6].includes(date.getDay())
-
-// Note: Ces fonctions ont été déplacées plus bas dans le code pour utiliser les données utilisateur
-
-// ===========================
-// Fonction pour adapter les paramètres selon l'âge et les données
-// ===========================
-const getAdaptiveParams = (totalLogsCount: number, ageWeeks: number) => {
-  // CLAMP_MAX évolutif selon l'âge
-  let clampMax: number
-  if (ageWeeks >= 24) clampMax = 300  // 5h après 6 mois
-  else if (ageWeeks >= 12) clampMax = 240  // 4h après 3 mois
-  else if (ageWeeks >= 4) clampMax = 180  // 3h après 1 mois
-  else clampMax = 150  // 2h30 pour nouveau-nés
-
-  // MIN_SAMPLES adaptatif selon les données disponibles
-  let minSamplesSlot: number
-  if (totalLogsCount < 30) minSamplesSlot = 2
-  else if (totalLogsCount < 100) minSamplesSlot = 3
-  else minSamplesSlot = 4
-
-  // Fenêtre temporelle adaptative selon l'âge et les données
-  const timeWindow = ageWeeks < 4 ? 48 : 
-                     totalLogsCount < 100 ? 72 : 
-                     96
-
-  return { clampMax, minSamplesSlot, timeWindow }
-}
 
 // ===========================
 // Composant principal
@@ -704,17 +399,12 @@ export default function FoodTracker() {
       console.warn("currentUserId is not set, skipping fetchLogsWithOptions")
       return []
     }
-    
-    const { orderBy = "timestamp", ascending = false, limit, startDate, endDate } = options
-    let query = supabase.from("food_logs").select("*").eq("user_id", userIdToUse)
-    if (startDate) query = query.gte("timestamp", startDate.toISOString())
-    if (endDate) query = query.lt("timestamp", endDate.toISOString())
-    query = query.order(orderBy, { ascending })
-    if (limit) query = query.limit(limit)
-    const { data, error } = await query
-    
-    if (error) handleSupabaseError(error, "data retrieval")
-    return data || []
+    try {
+      return await fetchLogsWithOptionsSvc(options, userIdToUse)
+    } catch (error: any) {
+      handleSupabaseError(error, "data retrieval")
+      return []
+    }
   }
 
   const calculateIntervalsFromData = (data: FoodLog[]) => {
@@ -754,11 +444,21 @@ export default function FoodTracker() {
     setTimeSinceLast(timeSinceLastCalculated)
   }, [timeSinceLastCalculated])
 
-  // Mémoisation du côté suggéré
+  // ===========================
+  // Logique de recommandation de sein (alternance intelligente)
+  // ===========================
   const suggestedSide = useMemo(() => {
+    // Si pas de dernière tétée, commencer par le sein gauche
+    if (!lastFeedingSide) return "left"
+    
+    // Alternance simple : gauche ↔ droite
     if (lastFeedingSide === "left") return "right"
     if (lastFeedingSide === "right") return "left"
-    if (lastFeedingSide === "bottle") return "left" // Après un biberon, suggérer le sein gauche
+    
+    // Après un biberon, reprendre au sein gauche
+    if (lastFeedingSide === "bottle") return "left"
+    
+    // Fallback sécurisé
     return "left"
   }, [lastFeedingSide])
 
@@ -770,12 +470,7 @@ export default function FoodTracker() {
     }
     
     try {
-      const { count, error } = await supabase
-        .from("food_logs")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userIdToUse)
-      if (error) handleSupabaseError(error, "total feeding count")
-      return count || 0
+      return await fetchTotalLogsCountSvc(userIdToUse)
     } catch (e) {
       console.error("Error fetching total logs count:", e)
       return 0
@@ -791,11 +486,17 @@ export default function FoodTracker() {
       const totalCount = await fetchTotalLogsCount(userId)
       setTotalLogsCount(totalCount)
 
+      // Mettre à jour le contexte de la dernière tétée
       if (data.length > 0) {
-        const lastFeeding = data[0] // Maintenant c'est vraiment la plus récente
+        const lastFeeding = data[0] // La plus récente grâce au tri descendant
+        if (lastFeeding.side === "left" || lastFeeding.side === "right") {
         setLastFeedingSide(lastFeeding.side)
+        } else {
+          setLastFeedingSide(null)
+        }
         setTimeSinceLast(calculateInterval(new Date(), new Date(lastFeeding.timestamp)))
       } else {
+        // Reset si aucune tétée trouvée
         setLastFeedingSide(null)
         setTimeSinceLast(null)
       }
@@ -814,18 +515,8 @@ export default function FoodTracker() {
     }
     
     try {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const { count, error } = await supabase
-        .from("food_logs")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userIdToUse)
-        .gte("timestamp", today.toISOString())
-        .lt("timestamp", tomorrow.toISOString())
-      if (error) handleSupabaseError(error, "feeding count")
-      setTodayCount(count || 0)
+      const count = await fetchTodayCountSvc(userIdToUse)
+      setTodayCount(count)
     } catch (e) {
       console.error("Error fetching today count:", e)
     }
@@ -1610,218 +1301,29 @@ export default function FoodTracker() {
   // Smart prediction + fenêtre probable (MÉMOISÉ)
   // ===========================
   
-  // Mémoisation des prédictions intelligentes
+  // Mémoisation des prédictions intelligentes (extrait en lib)
   const smartAlertsCalculated = useMemo(() => {
-    if (logs.length === 0) return null
-
-    const last = logs[0]
-    const lastTime = new Date(last.timestamp)
-    const now = new Date()
-    const timeSince = Math.floor((now.getTime() - lastTime.getTime()) / (1000 * 60))
-    
-
-    const winStart = new Date(now.getTime() - PREDICTION.TIME_WINDOW_HOURS * 60 * 60 * 1000)
-    const asc = [...logs]
-      .map((l) => ({ ...l }))
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-
-    const inWindow = asc.filter((l) => new Date(l.timestamp) >= winStart)
-    const seq = inWindow.length >= 2 ? inWindow : asc
-
-    const intervalsAll: number[] = []
-    const intervalsBySlot: Record<string, number[]> = {
-      "7-9": [],
-      "9-12": [],
-      "12-15": [],
-      "15-18": [],
-      "18-21": [],
-      "21-7": [],
-    }
-    const dayIntervals: number[] = []
-    const nightIntervals: number[] = []
-
-    for (let i = 1; i < seq.length; i++) {
-      const current = new Date(seq[i].timestamp)
-      const prev = new Date(seq[i - 1].timestamp)
-      
-      // Vérification des timestamps invalides (NÉCESSAIRE - protection contre corruption de données)
-      if (isNaN(current.getTime()) || isNaN(prev.getTime())) {
-        console.warn("Timestamp invalide détecté:", seq[i].timestamp, seq[i - 1].timestamp)
-        continue
-      }
-      
-      const interval = Math.floor((current.getTime() - prev.getTime()) / (1000 * 60))
-      if (interval < 1 || interval > 1440) continue
-
-      intervalsAll.push(interval)
-
-      const hour = current.getHours()
-      const slot = getCurrentTimeSlot(hour)
-      intervalsBySlot[slot].push(interval)
-
-      const isNightFeeding = hour >= 22 || hour < 7
-      if (isNightFeeding) nightIntervals.push(interval)
-      else dayIntervals.push(interval)
-    }
-
-    const weeks = calculateBabyAgeWeeks()
-    const ageDefaults =
-      weeks <= 4
-      ? { day: 90, night: 180 }
-      : weeks <= 12
-        ? { day: 120, night: 240 }
-        : weeks <= 24
-          ? { day: 150, night: 300 }
-          : { day: 180, night: 360 }
-
-    const curHour = now.getHours()
-    const curSlot = getCurrentTimeSlot(curHour)
-    const isNightNow = curHour >= 22 || curHour < 7
-
-    // Obtenir les paramètres adaptatifs
-    const adaptiveParams = getAdaptiveParams(totalLogsCount, calculateBabyAgeWeeks())
-    
-    // Utiliser la fenêtre temporelle adaptative
-    // La fenêtre temporelle est maintenant gérée par adaptiveParams.timeWindow
-    
-    let chosenIntervals: number[] | null = null
-
-    if (intervalsBySlot[curSlot].length >= adaptiveParams.minSamplesSlot) {
-      chosenIntervals = intervalsBySlot[curSlot]
-    }
-    if (!chosenIntervals) {
-      const pool = isNightNow ? nightIntervals : dayIntervals
-      if (pool.length >= PREDICTION.MIN_SAMPLES_DAY_NIGHT) chosenIntervals = pool
-    }
-    if (!chosenIntervals) {
-      if (intervalsAll.length >= 2) chosenIntervals = intervalsAll
-      else chosenIntervals = []
-    }
-
-    let expectedInterval: number
-    let reliabilityIndex = 0
-    
-    // Mode "données insuffisantes" si moins de 10 intervalles au total
-    if (intervalsAll.length < 10) {
-      expectedInterval = isNightNow ? 150 : 100 // Valeurs par défaut universelles
-      reliabilityIndex = 10 // Très faible
-    } else if (chosenIntervals.length > 0) {
-      expectedInterval = trimmedMean(chosenIntervals, PREDICTION.OUTLIER_TRIM_RATIO)
-      expectedInterval = clamp(Math.round(expectedInterval), PREDICTION.CLAMP_MIN, adaptiveParams.clampMax)
-    } else {
-      expectedInterval = isNightNow ? ageDefaults.night : ageDefaults.day
-    }
-    
-    // Détecter et gérer le cluster feeding
-    const isClusterTime = curHour >= 17 && curHour <= 21
-    const eveningAvg = intervalsBySlot["18-21"].length > 5 ? 
-                       median(intervalsBySlot["18-21"]) : null
-    
-    if (isClusterTime && eveningAvg && eveningAvg < expectedInterval * 0.7) {
-      expectedInterval = eveningAvg
-    }
-    
-    // Ancienne logique simplifiée comme fallback
-    const recentFeedingsCount = logs.filter(l => {
-      const feedingTime = new Date(l.timestamp)
-      const hoursSince = (now.getTime() - feedingTime.getTime()) / (1000 * 60 * 60)
-      return hoursSince <= 3 // Dernières 3 heures
-    }).length
-    
-    const isActiveClusterFeeding = isClusterTime && recentFeedingsCount >= 3
-
-    // Vérification de cohérence (optionnel - log pour debugging)
-    if (expectedInterval <= 0) {
-      console.warn("Intervalle attendu invalide, utilisation des valeurs par défaut")
-      expectedInterval = isNightNow ? ageDefaults.night : ageDefaults.day
-    }
-
-    const sigmaRobust = mad(chosenIntervals) * PROB_WINDOW.MAD_SCALE
-    const floorByRatio = expectedInterval * PROB_WINDOW.FLOOR_RATIO
-    let windowWidth = Math.max(sigmaRobust, floorByRatio, PROB_WINDOW.MIN)
-    windowWidth = clamp(windowWidth, PROB_WINDOW.MIN, PROB_WINDOW.MAX)
-
-    // Amélioration : fenêtre plus large pour les données variables
-    if (chosenIntervals.length > 0) {
-      const variance =
-        chosenIntervals.reduce((sum, val) => sum + Math.pow(val - expectedInterval, 2), 0) / chosenIntervals.length
-      const coefficientOfVariation = Math.sqrt(variance) / expectedInterval
-      
-      // Progression plus douce de la fenêtre selon la variabilité
-      windowWidth = windowWidth * (1 + coefficientOfVariation * 0.5)
-      windowWidth = clamp(windowWidth, PROB_WINDOW.MIN, PROB_WINDOW.MAX)
-    }
-
-    const nextFeedingPrediction = Math.max(0, expectedInterval - timeSince)
-    
-    // Calculer les bornes de la fenêtre de prédiction
-    const windowStart = expectedInterval - windowWidth / 2
-    const windowEnd = expectedInterval + windowWidth / 2
-    
-    // Vérifier si on est réellement dans la fenêtre temporelle
-    // Rouge si derrière la fenêtre (il faut téter maintenant)
-    // Vert si dans la fenêtre ou fenêtre dépassée (pas urgent)
-    const likely = timeSince >= windowStart && timeSince <= windowEnd
-
-    // Calcul de l'indice de fiabilité (seulement si pas déjà défini)
-    if (reliabilityIndex === 0 && chosenIntervals.length > 0) {
-      // Facteur 1: Nombre d'échantillons (max 40%)
-      const sampleFactor = Math.min(chosenIntervals.length / 10, 1) * 0.4
-
-      // Facteur 2: Régularité des données (max 40%)
-      const variance =
-        chosenIntervals.reduce((sum, val) => sum + Math.pow(val - expectedInterval, 2), 0) / chosenIntervals.length
-      const coefficientOfVariation = Math.sqrt(variance) / expectedInterval
-      const regularityFactor = Math.max(0, 1 - coefficientOfVariation) * 0.4
-
-      // Facteur 3: Récence des données (max 20%)
-      const recencyFactor = inWindow.length >= seq.length * 0.7 ? 0.2 : 0.1
-
-      reliabilityIndex = Math.min(sampleFactor + regularityFactor + recencyFactor, 1)
-    }
-
-    return {
-      nextFeedingPrediction,
-      sideRecommendation: null,
-      probWindowMinutes: Math.round(windowWidth * 10) / 10,
-      expectedIntervalMinutes: Math.round(expectedInterval * 10) / 10,
-      isLikelyWindow: likely,
-      reliabilityIndex: Math.round(reliabilityIndex * 100), // Pourcentage
-      isClusterFeeding: isActiveClusterFeeding
-    }
-  }, [logs, timeSinceLastCalculated])
+    return computePredictions({
+      logs,
+      totalLogsCount,
+      calculateBabyAgeWeeks,
+      timeSinceMinutes: timeSinceLastCalculated ?? undefined,
+    })
+  }, [logs, totalLogsCount, timeSinceLastCalculated])
 
   // Couleur du point mémorisée pour éviter les re-rendus inutiles
   const predictionPointColor = useMemo(() => {
-    if (timeSinceLast === null || expectedIntervalMinutes === null || probWindowMinutes === null) return "#ef4444"
-    // Utiliser la même logique que isLikelyWindow pour la cohérence
-    const windowStart = expectedIntervalMinutes - probWindowMinutes / 2
-    const windowEnd = expectedIntervalMinutes + probWindowMinutes / 2
-    const inWindow = timeSinceLast >= windowStart && timeSinceLast <= windowEnd
-    return inWindow ? "#3b82f6" : "#ef4444"
+    return getPredictionPointColor(timeSinceLast, expectedIntervalMinutes, probWindowMinutes)
   }, [timeSinceLast, expectedIntervalMinutes, probWindowMinutes])
 
   // Position du point stabilisée pour éviter le scintillement
   const stablePointPosition = useMemo(() => {
-    if (timeSinceLast === null) return 0
-    // Arrondir à la minute pour éviter les micro-mouvements
-    return Math.round(timeSinceLast)
+    return getStablePointPosition(timeSinceLast)
   }, [timeSinceLast])
 
   // Légende mémorisée pour éviter les re-rendus
   const predictionLegend = useMemo(() => {
-    if (!logs.length || !expectedIntervalMinutes || !probWindowMinutes) return { start: "", end: "" }
-    
-    const lastFeedingTime = new Date(logs[0].timestamp)
-    const startTime = new Date(
-      lastFeedingTime.getTime() + (expectedIntervalMinutes - probWindowMinutes / 2) * 60 * 1000,
-    )
-    const endTime = new Date(lastFeedingTime.getTime() + (expectedIntervalMinutes + probWindowMinutes / 2) * 60 * 1000)
-    
-    return {
-      start: startTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-      end: endTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-    }
+    return getPredictionLegend(logs, expectedIntervalMinutes, probWindowMinutes)
   }, [logs, expectedIntervalMinutes, probWindowMinutes])
 
   // Synchroniser les smart alerts avec les nouvelles données calculées
@@ -1882,16 +1384,15 @@ export default function FoodTracker() {
       if (!side || (side !== "left" && side !== "right" && side !== "bottle")) throw new Error("Type invalide")
       const feedingTimestamp = new Date().toISOString() // Timestamp de la nouvelle tétée
       console.log("➕ AJOUT TÉTÉE:", { side, feedingTimestamp })
-      
-      const { error } = await supabase.from("food_logs").insert([{ side, timestamp: feedingTimestamp, user_id: userIdToUse }])
-      if (error) {
-        console.error("❌ ERREUR INSERT:", error)
-        handleSupabaseError(error, "saving")
-        return
-      }
+      await addLogEntry({ side, timestamp: feedingTimestamp, userId: userIdToUse })
       
       console.log("✅ TÉTÉE INSÉRÉE AVEC SUCCÈS")
       setSuccess("Feeding saved!")
+      
+      // Mise à jour immédiate du côté pour la recommandation suivante (seins uniquement)
+      if (side === "left" || side === "right") {
+        setLastFeedingSide(side)
+      }
       
       console.log("🔄 DÉBUT LOADALLDATAWITHRECORDCHECK")
       await loadAllDataWithRecordCheck(feedingTimestamp, userIdToUse) // Passer le vrai timestamp et l'ID utilisateur
@@ -1909,7 +1410,9 @@ export default function FoodTracker() {
     setEditingId(log.id)
     const d = new Date(log.timestamp)
     setEditingDate(d.toISOString().split("T")[0])
-    setEditingTime(d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }))
+    const h = d.getHours().toString().padStart(2, "0")
+    const m = d.getMinutes().toString().padStart(2, "0")
+    setEditingTime(`${h}:${m}`)
   }, [])
   
   const cancelEditing = useCallback(() => {
@@ -1930,8 +1433,7 @@ export default function FoodTracker() {
       if (!editingDate || !editingTime) throw new Error("Date et heure requises")
       const combined = new Date(`${editingDate}T${editingTime}`)
       if (isNaN(combined.getTime())) throw new Error("Date ou heure invalide")
-      const { error } = await supabase.from("food_logs").update({ timestamp: combined.toISOString() }).eq("id", id).eq("user_id", currentUserId)
-      if (error) handleSupabaseError(error, "modification")
+      await updateLogTimestamp(id, combined.toISOString())
       setSuccess("Feeding modified!")
       await loadAllDataWithRecordCheck()
     } catch (e: any) {
@@ -1955,8 +1457,7 @@ export default function FoodTracker() {
     setError(null)
     setSuccess(null)
     try {
-      const { error } = await supabase.from("food_logs").delete().eq("id", id).eq("user_id", currentUserId)
-      if (error) handleSupabaseError(error, "la suppression")
+      await deleteLogEntry(id)
       setSuccess("Feeding deleted!")
       await loadAllDataWithRecordCheck()
     } catch (e: any) {
@@ -2331,6 +1832,7 @@ export default function FoodTracker() {
           : "text-red-600" // Rouge si jamais dans la fenêtre
 
   return (
+    <HydrationWrapper>
     <div
       className={`min-h-screen ${
         isDarkMode 
@@ -2490,298 +1992,37 @@ export default function FoodTracker() {
         </Alert>
       )}
 
-      {/* Quick Add */}
-      <Card className={isDarkMode ? "bg-[#2a2a2a] border-gray-700" : "bg-white border-gray-200"}>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-            <Plus className="h-5 w-5" />
-            Add a feeding
-          </CardTitle>
-          <p className={`text-xs italic ${isDarkMode ? "text-gray-400" : "text-gray-400"}`}>
-            The highlighted breast indicates the recommended side for balanced feeding
-          </p>
-        </CardHeader>
-        <CardContent className="px-4 sm:px-6 py-0">
-          <div className="flex flex-row flex-nowrap gap-3 sm:gap-6 items-stretch">
-            {/* Breast Toggle */}
-            <div className={`${isDarkMode ? "bg-gray-700" : "bg-gray-100"} rounded-2xl px-3 py-4 sm:px-4 sm:py-5 flex flex-col items-center gap-2 sm:gap-3 basis-2/3 flex-[2] min-w-0`}>
-              <div className="flex gap-4 sm:gap-5 relative">
-                {/* Left Breast */}
-                <div className="flex flex-col items-center gap-1">
-                  <div className="relative">
-                    {suggestedSide === "left" && (
-                      <div className="absolute inset-0 rounded-full bg-pink-300/80 animate-ping" style={{ width: '45px', height: '45px', top: '5.5px', left: '5.5px' }}></div>
-                    )}
-                    <div 
-                      onClick={() => !submitting && addLog("left")}
-                      className={`rounded-full cursor-pointer transition-all duration-300 flex items-center justify-center text-base sm:text-lg font-semibold relative border-3 ${
-                        suggestedSide === "left"
-                          ? "bg-pink-500 text-white border-pink-500 shadow-lg shadow-pink-500/30"
-                          : `${isDarkMode ? "bg-gray-800 border-pink-500/70 text-pink-500 hover:bg-gray-700" : "bg-white border-pink-500/70 text-pink-500"} hover:scale-105 hover:shadow-md`
-                      } ${submitting ? "opacity-50 cursor-not-allowed" : ""}`}
-                      style={{ width: '56px', height: '56px' }}
-                    >
-                    <div className="flex items-baseline gap-0.5 leading-none">
-                      <span className={`text-xl sm:text-2xl font-semibold ${suggestedSide === "left" ? "text-white" : "text-gray-400"}`}>L</span>
-                      <span className={`text-[9px] sm:text-[10px] font-medium opacity-90 ${suggestedSide === "left" ? "text-white" : "text-gray-400"}`} style={{ transform: 'translateY(0.5px)' }}>eft</span>
-                    </div>
-                    </div>
-                  </div>
-                </div>
-                {/* Right Breast */}
-                <div className="flex flex-col items-center gap-1">
-                  <div className="relative">
-                    {suggestedSide === "right" && (
-                      <div className="absolute inset-0 rounded-full bg-purple-300/80 animate-ping" style={{ width: '45px', height: '45px', top: '5.5px', left: '5.5px' }}></div>
-                    )}
-                    <div 
-                      onClick={() => !submitting && addLog("right")}
-                      className={`rounded-full cursor-pointer transition-all duration-300 flex items-center justify-center text-base sm:text-lg font-semibold relative border-3 ${
-                        suggestedSide === "right"
-                          ? "bg-purple-500 text-white border-purple-500 shadow-lg shadow-purple-500/30"
-                          : `${isDarkMode ? "bg-gray-800 border-purple-500/70 text-purple-500 hover:bg-gray-700" : "bg-white border-purple-500/70 text-purple-500"} hover:scale-105 hover:shadow-md`
-                    } ${submitting ? "opacity-50 cursor-not-allowed" : ""}`}
-                      style={{ width: '56px', height: '56px' }}
-                    >
-                    <div className="flex items-baseline gap-0.5 leading-none">
-                      <span className={`text-xl sm:text-2xl font-semibold ${suggestedSide === "right" ? "text-white" : "text-gray-400"}`}>R</span>
-                      <span className={`text-[9px] sm:text-[10px] font-medium opacity-90 ${suggestedSide === "right" ? "text-white" : "text-gray-400"}`} style={{ transform: 'translateY(0.5px)' }}>ight</span>
-                    </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <span className={`text-xs sm:text-sm ${isDarkMode ? "text-gray-300" : "text-gray-500"}`}>Breast</span>
-            </div>
-
-            {/* Bottle Option */}
-            <div 
-              onClick={() => !submitting && addLog("bottle")}
-              className={`${isDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"} rounded-2xl px-3 py-4 sm:px-4 sm:py-5 cursor-pointer transition-all duration-300 flex flex-col items-center gap-2 hover:-translate-y-0.5 basis-1/3 flex-[1] min-w-0 ${
-                submitting ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            >
-              <div className={`${isDarkMode ? "bg-green-900" : "bg-green-100"} rounded-full flex items-center justify-center text-xl sm:text-2xl transition-all duration-300`} style={{ width: '44px', height: '44px' }}>
-                🍼
-              </div>
-              <span className={`text-xs sm:text-sm ${isDarkMode ? "text-gray-300" : "text-gray-500"}`}>Bottle</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Add a feeding */}
+      <AddFeedingPanel
+        isDarkMode={isDarkMode}
+        submitting={submitting}
+        suggestedSide={suggestedSide}
+        onAddFeeding={addLog}
+      />
 
       {/* Cartes Aujourd'hui + Smart */}
-      {/* Unified Today & Predictions Block */}
-      <div 
-        id="todayCard"
-        data-testid="today-block"
-        className={`rounded-2xl overflow-hidden shadow-sm transition-all duration-300 ${
-          wasInWindow 
-            ? isDarkMode 
-              ? "bg-green-900/20" 
-              : "bg-green-50"
-            : isDarkMode 
-              ? "bg-red-900/20" 
-              : "bg-red-50"
-        }`}
-      >
-        {/* Today Section - Top */}
-        <div className={`p-5 flex justify-between items-center ${
-          wasInWindow 
-            ? isDarkMode 
-              ? "bg-green-900/20" 
-              : "bg-green-50"
-            : isDarkMode 
-              ? "bg-red-900/20" 
-              : "bg-red-50"
-        }`}>
-          <div className="flex items-center gap-4">
-            <Calendar className="h-5 w-5" />
-            <div className="flex flex-col gap-0.5">
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">Today</div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">{todayCount}</span>
-                <span className="text-sm text-muted-foreground">feedings</span>
-              </div>
-            </div>
-          </div>
-          {timeSinceLast !== null && (
-            <div className={`text-xs font-medium ${lastTextColor}`}>
-              last {formatTimeSinceLast(timeSinceLast)} ago
-            </div>
-          )}
-        </div>
-
-        {/* Predictions Section - Bottom */}
-        <div className={`p-5 border-t ${isDarkMode ? "bg-[#2a2a2a] border-gray-700" : "bg-white border-gray-200"}`}>
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide">Predictions</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPredictionInfo(true)}
-                className="h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
-                title="How are predictions calculated?"
-              >
-                <Info className="h-3 w-3" />
-              </Button>
-            </div>
-            {reliabilityIndex !== null && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Reliability: {reliabilityIndex}%</span>
-                <div className={`w-2 h-2 rounded-full ${
-                  reliabilityIndex >= 80 ? "bg-green-500" : reliabilityIndex >= 60 ? "bg-yellow-500" : "bg-red-500"
-                }`}></div>
-              </div>
-            )}
-          </div>
-
-          {totalLogsCount < 30 && (
-            <div className="text-amber-600 text-xs mb-4">
-              🔄 Learning mode - {30 - totalLogsCount} more feedings for reliable predictions
-            </div>
-          )}
-
-          <div className="flex items-center gap-5 mb-3">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
-              wasInWindow 
-                ? "bg-blue-100" 
-                : "bg-amber-100"
-            }`}>
-              {wasInWindow ? "🔔" : "⏰"}
-            </div>
-            <div className="flex-1">
-              <div className="text-xs text-muted-foreground mb-1">
-                Next at {(() => {
-                  const lastFeedingTime = logs.length > 0 ? new Date(logs[0].timestamp) : new Date()
-                  const interval = expectedIntervalMinutes ?? 0
-                  const probableTime = new Date(lastFeedingTime.getTime() + interval * 60 * 1000)
-                  return probableTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-                })()}
-              </div>
-              <div className={`text-2xl font-semibold mb-1 ${
-                wasInWindow 
-                  ? isDarkMode ? "text-green-400" : "text-green-600"
-                  : isDarkMode ? "text-red-400" : "text-red-600"
-              }`}>
-                {smartAlerts.nextFeedingPrediction !== null
-                  ? smartAlerts.nextFeedingPrediction <= 5
-                    ? "Now!"
-                    : `In ${formatTimeInterval(roundToStep(Math.round(smartAlerts.nextFeedingPrediction)))}`
-                  : "Not enough data"}
-              </div>
-              {probWindowMinutes !== null && (
-                <div className="text-xs text-muted-foreground">
-                  Window ≈ {Math.round(probWindowMinutes)}min
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Cluster feeding alert */}
-          {smartAlerts?.isClusterFeeding && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-purple-50 border border-purple-200 mb-4">
-              <span className="text-purple-600 text-sm font-medium">
-                🍇 Cluster feeding period detected
-              </span>
-            </div>
-          )}
-
-          {/* Prediction window graph - only show when in window */}
-          {smartAlerts.nextFeedingPrediction !== null &&
-            probWindowMinutes !== null &&
-            expectedIntervalMinutes !== null &&
-            timeSinceLast !== null &&
-            wasInWindow && (
-              <div
-                data-testid="prediction-window"
-                className={`p-3 rounded-lg ${isDarkMode ? "bg-gray-700 border border-gray-600" : "bg-gray-50 border border-gray-200"}`}
-              >
-                {/* Graphique simple avec zones */}
-                <div className="h-[80px] mb-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart 
-                      data={[{ time: expectedIntervalMinutes - 60 }, { time: expectedIntervalMinutes + 60 }]} 
-                      margin={{ top: 10, right: 15, left: 10, bottom: 10 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      
-                      {/* Zone de fenêtre probable (bleu) - centrée sur la tétée probable */}
-                      <ReferenceArea
-                          x1={expectedIntervalMinutes - probWindowMinutes / 2}
-                          x2={expectedIntervalMinutes + probWindowMinutes / 2}
-                        fill={isDarkMode ? "#60a5fa" : "#3b82f6"}
-                        fillOpacity={isDarkMode ? 0.4 : 0.3}
-                      />
-                      
-                      {/* Point qui change de couleur selon la position */}
-                      <Line
-                        type="monotone"
-                        data={[{ time: stablePointPosition, value: 0.5 }]}
-                        dataKey="value"
-                        stroke="none"
-                        dot={{ 
-                          fill: predictionPointColor, 
-                          strokeWidth: 2, 
-                            r: 6,
-                        }}
-                        
-                      />
-                      
-                      <XAxis
-                        type="number"
-                        dataKey="time"
-                        domain={[expectedIntervalMinutes - 60, expectedIntervalMinutes + 60]}
-                        tickFormatter={xAxisTickFormatter}
-                          tick={{ fontSize: 11, fill: isDarkMode ? "#e5e7eb" : "#374151" }}
-                      />
-                      <YAxis hide />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                
-                {/* Légende de la fenêtre */}
-                  <div className={`flex justify-between text-xs mt-2 ${isDarkMode ? "text-gray-300" : "text-gray-600"}`}>
-                    <span>Start : {predictionLegend.start}</span>
-                    <span>End : {predictionLegend.end}</span>
-                </div>
-              </div>
-            )}
-
-          {/* Alerts and Records */}
-          {calculateBabyAgeWeeks() < 4 && (timeSinceLast ?? 0) > 180 && (
-            <Alert className="mt-4 border-red-500">
-              <AlertDescription className="text-red-600 text-xs font-semibold">
-                ⚠️ More than 3h since last feeding
-              </AlertDescription>
-            </Alert>
-          )}
-          {approachingRecord && (
-            <div className="text-xs mt-4 font-medium space-y-1">
-              {approachingRecord.beatenRecords.length > 0 && !approachingRecord.allRecordsBroken && (
-                <p className="text-green-600">
-                  🎉 Record{approachingRecord.beatenRecords.length > 1 ? "s" : ""}{" "}
-                  {approachingRecord.beatenRecords.join(", ")} beaten
-                  {approachingRecord.beatenRecords.length > 1 ? "s" : ""} !
-                </p>
-              )}
-              {approachingRecord.allRecordsBroken ? (
-                <p className="text-purple-600 animate-pulse">
-                  👑 ABSOLUTE {approachingRecord.isNight ? "NIGHT" : "DAY"} RECORD IN PROGRESS !
-                </p>
-              ) : (
-                approachingRecord.isApproaching && (
-                  <p className="text-amber-600 animate-pulse">
-                    🔥 Only {approachingRecord.timeRemaining}min left for {approachingRecord.nextRecordRank} record{" "}
-                    {approachingRecord.isNight ? "night" : "day"} ! ({formatTimeInterval(approachingRecord.recordInterval)})
-                  </p>
-                )
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <TodayAndSmartCards
+        isDarkMode={isDarkMode}
+        wasInWindow={wasInWindow}
+        todayCount={todayCount}
+        timeSinceLast={timeSinceLast}
+        lastTextColor={lastTextColor}
+        setShowPredictionInfo={setShowPredictionInfo}
+        reliabilityIndex={reliabilityIndex}
+        totalLogsCount={totalLogsCount}
+        logs={logs}
+        expectedIntervalMinutes={expectedIntervalMinutes}
+        smartAlerts={smartAlerts}
+        probWindowMinutes={probWindowMinutes}
+        stablePointPosition={stablePointPosition}
+        predictionPointColor={predictionPointColor}
+        predictionLegend={predictionLegend}
+        approachingRecord={approachingRecord}
+        calculateBabyAgeWeeks={calculateBabyAgeWeeks}
+        formatTimeSinceLast={(m: number) => formatTimeSinceLast(m) ?? ""}
+        formatTimeInterval={formatTimeInterval}
+        roundToStep={roundToStep}
+      />
 
       {/* Interval Evolution */}
         <Card className={`gap-2 ${isDarkMode ? "bg-[#2a2a2a] border-gray-700" : "bg-white border-gray-200"}`}>
@@ -3668,216 +2909,34 @@ export default function FoodTracker() {
       </Card>
 
       {/* Table récentes */}
-      <Card className={isDarkMode ? "bg-[#2a2a2a] border-gray-700" : "bg-white border-gray-200"}>
-        <CardHeader className="pb-3">
-          <CardTitle>Recent feedings (20)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Side</TableHead>
-                <TableHead>Ago</TableHead>
-                <TableHead>Gap</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logsWithIntervals.map((log) => {
-                // Déterminer si c'est une tétée de jour ou de nuit
-                const feedingTime = new Date(log.timestamp)
-                const hour = feedingTime.getHours()
-                const isNightFeeding = hour >= 22 || hour < 7
-                
-                // Classes CSS pour le background jour/nuit
-                const dayNightBg = isNightFeeding 
-                  ? (isDarkMode ? "bg-blue-950/20" : "bg-blue-50/50")  // Nuit - bleu subtil
-                  : (isDarkMode ? "bg-amber-950/20" : "bg-amber-50/50") // Jour - jaune subtil
-                
-                return (
-                <TableRow key={log.id} className={`group hover:bg-muted/50 ${dayNightBg}`}>
-                  <TableCell className="font-medium">
-                    {editingId === log.id ? (
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <Input
-                            type="date"
-                            value={editingDate}
-                            onChange={(e) => setEditingDate(e.target.value)}
-                            className="w-36 h-8"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Input
-                            type="time"
-                            value={editingTime}
-                            onChange={(e) => setEditingTime(e.target.value)}
-                            className="w-24 h-8"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1 mt-2 sm:mt-0">
-                          <Button
-                            onClick={() => saveEdit(log.id)}
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 hover:bg-green-50 hover:text-green-600"
-                            title="Save"
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            onClick={cancelEditing}
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
-                            title="Cancel"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span>{formatTimestamp(log.timestamp)}</span>
-                        <Button
-                          onClick={() => startEditing(log)}
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 opacity-100 transition-opacity hover:bg-blue-50 hover:text-blue-600"
-                          title="Edit date and time"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {log.side === "bottle" ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
-                        {sideLabels[log.side]}
-                      </span>
-                    ) : (
-                      <Badge variant={sideBadgeVariant(log.side)}>{sideLabels[log.side]}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{formatPreciseTimeSince(log.timestamp)}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {log.intervalMinutes ? (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">
-                          {formatTimeInterval(log.intervalMinutes)}
-                        </Badge>
-                        {(() => {
-                          const ind = getRecordIndicator(log)
-                          return ind ? (
-                            <span
-                              className="text-lg"
-                              title={`${ind.includes("🌙") ? "Night" : "Day"} record of the month`}
-                            >
-                              {ind}
-                            </span>
-                          ) : null
-                        })()}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId !== log.id && (
-                      <Button
-                        onClick={() => deleteLog(log.id)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600"
-                        title="Delete this feeding"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-                )
-              })}
-              {logsWithIntervals.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No feedings recorded
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <RecentFeedingsTable
+        isDarkMode={isDarkMode}
+        logsWithIntervals={logsWithIntervals}
+        editingId={editingId}
+        editingDate={editingDate}
+        editingTime={editingTime}
+        startEditing={startEditing}
+        cancelEditing={cancelEditing}
+        saveEdit={saveEdit}
+        deleteLog={deleteLog}
+        formatTimestamp={formatTimestamp}
+        sideLabels={sideLabels}
+        sideBadgeVariant={sideBadgeVariant}
+        formatTimeInterval={formatTimeInterval}
+        getRecordIndicator={getRecordIndicator}
+        onChangeEditingDate={setEditingDate}
+        onChangeEditingTime={setEditingTime}
+      />
 
       {/* Popup d'information sur les prédictions */}
-      <Dialog open={showPredictionInfo} onOpenChange={setShowPredictionInfo}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>How is it calculated?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 text-sm">
-            <div>
-              <strong>1. Analysis of your habits</strong>
-              <br />
-              The algorithm uses an adaptive window: {(() => {
-                const adaptiveParams = getAdaptiveParams(totalLogsCount, calculateBabyAgeWeeks())
-                return `${adaptiveParams.timeWindow}h for ${calculateBabyAgeWeeks()} week old babies`
-              })()}. It prioritizes recent data first, then data from the same time slot, then day/night.
-            </div>
-            <div>
-              <strong>2. Expected interval calculation</strong>
-              <br />
-              It uses an "intelligent" average that ignores extreme values to prevent a few
-              atypical feedings from skewing the prediction. If fewer than 10 intervals available, uses universal default values.
-            </div>
-            <div>
-              <strong>3. Adaptive probability window</strong>
-              <br />
-              The window adapts progressively according to the variability of your habits: the more regular the intervals, the more accurate the prediction.
-            </div>
-            <div>
-              <strong>4. Reliability index</strong>
-              <br />
-              The reliability percentage combines 3 factors: number of feedings analyzed (40%), interval
-              regularity (40%), and data recency (20%). Very low if fewer than 10 intervals.
-            </div>
-            <div>
-              <strong>5. Intelligent cluster feeding detection</strong>
-              <br />
-              The algorithm analyzes evening intervals (6pm-9pm) and automatically detects cluster feeding periods, adjusting predictions accordingly.
-            </div>
-            <div>
-              <strong>6. Dynamic parameter adaptation</strong>
-              <br />
-              Parameters adapt automatically: CLAMP_MAX according to age, MIN_SAMPLES according to data quantity, and time window according to age and history.
-            </div>
-            <div className="text-xs text-muted-foreground mt-4 p-3 bg-blue-50 rounded-lg">
-              💡 <strong>Tip:</strong> The more regularly you use the app, the more reliability
-              increases and predictions become accurate!
-            </div>
-            <div className="text-xs text-muted-foreground p-2 bg-gray-50 rounded-lg">
-              <strong>Reliability thresholds:</strong> 🔴 &lt;45% (few data), 🟡 45-80% (average), 🟢 &gt;80% (reliable)
-            </div>
-            <div className="text-xs text-muted-foreground p-2 bg-green-50 rounded-lg">
-              <strong>Current data:</strong> {totalLogsCount} total feedings in database (display limited to 20)
-            </div>
-            <div className="text-xs text-muted-foreground p-2 bg-blue-50 rounded-lg">
-              <strong>Current adaptive parameters:</strong>
-              <div className="mt-1 grid grid-cols-2 gap-1 text-xs">
-                <div>• CLAMP_MAX: {getAdaptiveParams(totalLogsCount, calculateBabyAgeWeeks()).clampMax} min</div>
-                <div>• MIN_SAMPLES: {getAdaptiveParams(totalLogsCount, calculateBabyAgeWeeks()).minSamplesSlot}</div>
-                <div>• Window: {getAdaptiveParams(totalLogsCount, calculateBabyAgeWeeks()).timeWindow}h</div>
-                <div>• Baby age: {calculateBabyAgeWeeks()} weeks</div>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PredictionInfoDialog
+        open={showPredictionInfo}
+        onOpenChange={setShowPredictionInfo}
+        totalLogsCount={totalLogsCount}
+        calculateBabyAgeWeeks={calculateBabyAgeWeeks}
+      />
       </div>
     </div>
+    </HydrationWrapper>
   )
 }

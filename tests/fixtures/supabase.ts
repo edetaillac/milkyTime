@@ -145,19 +145,21 @@ export async function cleanupTestData() {
     console.log("🧹 Nettoyage des données de test...")
     console.log(`🔗 Base utilisée: ${supabaseUrl}`)
     console.log(`🔒 Mode test: ${isTestEnvironment}`)
-    
-    // Nettoyage moins agressif - seulement les données récentes de test
-    const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    
+
+    // Nettoyage déterministe: supprimer tous les logs du MOIS COURANT pour l'utilisateur de test
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
     const { error } = await supabase
       .from("food_logs")
       .delete()
-      .gte("timestamp", cutoffDate) // Supprimer seulement les dernières 24h
-    
+      .gte("timestamp", startOfMonth)
+      .eq("user_id", DEFAULT_USER_ID)
+
     if (error) {
       console.error("Erreur lors du nettoyage des données de test:", error)
     } else {
-      console.log("✅ Données de test nettoyées (dernières 24h)")
+      console.log("✅ Données de test nettoyées (mois courant, utilisateur de test)")
     }
   } catch (error) {
     console.error("Erreur lors du nettoyage:", error)
