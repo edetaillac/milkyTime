@@ -140,12 +140,25 @@ make test-ui          # Full UI test suite
 mon-app-tetees/
 ├── app/                 # Next.js pages (App Router)
 ├── components/          # React components + UI
-├── lib/                # Utilities
-├── tests/              # Playwright tests
-├── public/             # Static assets
-├── scripts/            # SQL scripts
-├── Makefile           # Development commands
-├── Dockerfile         # Docker configuration
-└── .env.example       # Configuration template
+├── lib/                 # Utilities & shared helpers
+├── src/hooks/           # Hooks métier (ex: useFoodTracker)
+├── src/services/        # Services (ex: feedingService)
+├── tests/               # Playwright tests
+├── public/              # Static assets
+├── scripts/             # SQL scripts
+├── Makefile             # Development commands
+├── Dockerfile           # Docker configuration
+└── .env.example         # Configuration template
 ```
 
+## 🧱 Application architecture
+
+- `src/services/feedingService.ts`: single entry point for Supabase queries and data aggregation (daily stats, interval processing, records). The service returns typed objects that can be reused by hooks or tests.
+- `src/hooks/useFoodTracker.ts`: orchestrates authentication, data loading, record handling and smart alerts, and exposes the values/actions the UI needs.
+- `app/page.tsx`: presentation layer that consumes the hook and wires the sub-components (AddFeedingPanel, TodayAndSmartCards, timelines, etc.).
+
+### 🔭 Suggested next steps
+
+- Introduce a `FoodTrackerContext` to remove heavy prop drilling and let child components consume only what they need.
+- Break `useFoodTracker` into focused hooks (`useAuthTracker`, `useFeedingData`, `useRecordsNotifications`, …) to honour the single-responsibility principle and ease unit testing.
+- Strengthen typing for the visualisation components (timelines/charts) to remove `any` casts and guarantee compatibility with the data returned by the service.
