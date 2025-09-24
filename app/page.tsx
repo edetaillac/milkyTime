@@ -53,20 +53,14 @@ import { MonthlyRecords } from "../src/components/MonthlyRecords"
 import { AppHeader } from "../src/components/AppHeader"
 import { FeedingTimeline } from "../src/components/FeedingTimeline"
 import { FeedingTimeline24h } from "../src/components/FeedingTimeline24h"
+import { FeedingTimeline3d } from "../src/components/FeedingTimeline3d"
+import { FeedingTimeline7d } from "../src/components/FeedingTimeline7d"
+import { IntervalStatisticsByDays } from "../src/components/IntervalStatisticsByDays"
+import { IntervalStatisticsByWeeks } from "../src/components/IntervalStatisticsByWeeks"
+import { EvolutionChart } from "../src/components/EvolutionChart"
 import { calculateBabyAgeWeeksFromBirthDate, formatBabyAgeFromBirthDate, isNightHour } from "../src/lib"
 import { DeleteConfirmDialog } from "../src/components/DeleteConfirmDialog"
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  BarChart,
-  Bar,
-  ReferenceArea,
-} from "recharts"
+import { ResponsiveContainer, BarChart, Bar, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts"
 import {
   Calendar,
   Plus,
@@ -82,7 +76,6 @@ import {
   Info,
   Sun,
   Moon,
-  AlignHorizontalSpaceAround,
   Droplets,
   Circle,
 } from "lucide-react"
@@ -1936,274 +1929,31 @@ export default function FoodTracker() {
                   </TabsContent>
 
                   <TabsContent value="3d" className="mt-2">
-                    <div className="h-[280px] -mt-0.5 -mb-0.5">
-                      {intervalChartData72h.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                                              <LineChart
-                          data={intervalChartData72h}
-                        margin={{ top: 8, right: 10, left: 0, bottom: 10 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        
-                        {/* Zones jour/nuit basées sur les timestamps réels */}
-                        {intervalChartData72h.length > 0 &&
-                          (() => {
-                            const rawStart = Math.min(...intervalChartData72h.map((d) => d.numericTime ?? 0))
-                            const rawEnd = Math.max(...intervalChartData72h.map((d) => d.numericTime ?? 0))
-                            const startAligned = new Date(rawStart); startAligned.setMinutes(0, 0, 0)
-                            const endAligned = new Date(rawEnd); endAligned.setMinutes(0, 0, 0)
-                            const startMs = startAligned.getTime()
-                            const endMs = endAligned.getTime() + 60 * 60 * 1000
-                            const zones = []
-                            for (let time = startMs; time <= endMs; time += 60 * 60 * 1000) {
-                              const currentDate = new Date(time)
-                              const nextTime = Math.min(time + 60 * 60 * 1000, endMs)
-                              const isNight = isNightHour(currentDate)
-                              zones.push(
-                                <ReferenceArea
-                                  key={`zone-${time}`}
-                                  x1={time}
-                                  x2={nextTime}
-                                  fill={isNight ? "#cbd5e1" : "#fde68a"}
-                                  fillOpacity={isNight ? 0.3 : 0.3}
-                                  />,
-                              )
-                            }
-                            return zones
-                          })()}
-
-                        <XAxis
-                          type="number"
-                          dataKey="numericTime"
-                          domain={["dataMin", "dataMax"]}
-                          angle={-45}
-                          textAnchor="end"
-                          height={36}
-                          tickMargin={4}
-                          fontSize={10}
-                          tick={{ fontSize: 10 }}
-                          ticks={getXAxisTicks(intervalChartData72h)}
-                          tickFormatter={(value: number) => {
-                            const date = new Date(value)
-                            const now = new Date()
-                            const isToday = date.toDateString() === now.toDateString()
-                            const isYesterday =
-                              date.toDateString() === new Date(now.getTime() - 24 * 60 * 60 * 1000).toDateString()
-                            
-                            if (isToday) {
-                              return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-                            } else if (isYesterday) {
-                              return `Yesterday ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                            } else {
-                              return `${date.toLocaleDateString("en-US", { day: "2-digit", month: "2-digit" })} ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                            }
-                          }}
-                        />
-                        <YAxis 
-                          tick={{ fontSize: 10 }} 
-                          domain={[0, (dataMax: number) => Math.max(dataMax * 1.1, dataMax + 30)]} 
-                          tickFormatter={formatYAxisInterval}
-                          ticks={getYAxisTicks(Math.max(...intervalChartData72h.map((d) => d.interval)))}
-                          tickMargin={4}
-                          padding={{ top: 2, bottom: 2 }}
-                        />
-                        <Tooltip
-                          formatter={(v: any, name: any) =>
-                            name === "Trend" ? [null, null] : [formatTimeInterval(v as number), "Deviation"]
-                          }
-                          labelFormatter={(label: any, payload: any) => {
-                            if (payload && payload[0] && payload[0].payload) {
-                              const d = payload[0].payload
-                              const date = new Date(d.timestamp)
-                              return `${date.toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "2-digit" })} at ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                            }
-                            return label
-                          }}
-                          contentStyle={getTooltipContentStyle()}
-                        />
-
-                        <Line
-                          type="monotone"
-                          dataKey="interval"
-                          stroke="#8b5cf6"
-                          strokeWidth={2}
-                          
-                          dot={(props: any) => {
-                            const { cx, cy, payload } = props
-                            const sideKey = (payload.side ?? "bottle") as keyof typeof sideColors
-                            const sideColor = payload.side ? sideColors[sideKey] : "#8b5cf6"
-                            const strokeColor = payload.side ? sideColors[sideKey] : "#7c3aed"
-                            return (
-                              <circle
-                                key={`dot-${payload.timestamp}`}
-                                cx={cx}
-                                cy={cy}
-                                r={4}
-                                fill={sideColor}
-                                stroke="white"
-                                strokeWidth={2}
-                              />
-                            )
-                          }}
-                          activeDot={{ r: 6, stroke: "white", strokeWidth: 2 }}
-                        />
-                        
-                        <Line
-                          type="monotone"
-                          dataKey="trendLine"
-                          stroke="#94a3b8"
-                          strokeWidth={2}
-                          strokeDasharray="8 4"
-                          dot={false}
-                          activeDot={false}
-                          name="Trend"
-                          opacity={0.6}
-                          
-                        />
-                        
-
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <div className="text-center">
-                        <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No feedings in 72h</p>
-                      <p className="text-sm">At least 2 feedings are required</p>
-                      </div>
-                    </div>
-                  )}
-                    </div>
+                    <FeedingTimeline3d
+                      isDarkMode={isDarkMode}
+                      data={intervalChartData72h as any}
+                      getTooltipContentStyle={getTooltipContentStyle}
+                      formatTimeInterval={formatTimeInterval}
+                      formatYAxisInterval={formatYAxisInterval}
+                      sideColors={sideColors as any}
+                      isNightHour={isNightHour}
+                      getXAxisTicks={getXAxisTicks as any}
+                      getYAxisTicks={getYAxisTicks}
+                    />
                   </TabsContent>
 
                   <TabsContent value="7d" className="mt-2">
-                    <div className="h-[280px] -mt-0.5 -mb-0.5">
-                      {intervalChartData7d.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={intervalChartData7d}
-                            margin={{ top: 8, right: 10, left: 0, bottom: 10 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            {intervalChartData7d.length > 0 &&
-                              (() => {
-                                const rawStart = Math.min(...intervalChartData7d.map((d) => d.numericTime ?? 0))
-                                const rawEnd = Math.max(...intervalChartData7d.map((d) => d.numericTime ?? 0))
-                                const startAligned = new Date(rawStart); startAligned.setMinutes(0, 0, 0)
-                                const endAligned = new Date(rawEnd); endAligned.setMinutes(0, 0, 0)
-                                const startMs = startAligned.getTime()
-                                const endMs = endAligned.getTime() + 60 * 60 * 1000
-                                const zones = []
-                                for (let time = startMs; time <= endMs; time += 60 * 60 * 1000) {
-                                  const currentDate = new Date(time)
-                                  const nextTime = Math.min(time + 60 * 60 * 1000, endMs)
-                                  const isNight = isNightHour(currentDate)
-                                  zones.push(
-                                    <ReferenceArea
-                                      key={`zone-${time}`}
-                                      x1={time}
-                                      x2={nextTime}
-                                      fill={isNight ? "#cbd5e1" : "#fde68a"}
-                                      fillOpacity={isNight ? 0.3 : 0.3}
-                                    />,
-                                  )
-                                }
-                                return zones
-                              })()}
-                            <XAxis
-                              type="number"
-                              dataKey="numericTime"
-                              domain={["dataMin", "dataMax"]}
-                              angle={-45}
-                              textAnchor="end"
-                              height={36}
-                              tickMargin={4}
-                              fontSize={10}
-                              tick={{ fontSize: 10 }}
-                              ticks={getXAxisTicks(intervalChartData7d)}
-                              tickFormatter={(value: number) => {
-                                const date = new Date(value)
-                                const now = new Date()
-                                const isToday = date.toDateString() === now.toDateString()
-                                const isYesterday =
-                                  date.toDateString() === new Date(now.getTime() - 24 * 60 * 60 * 1000).toDateString()
-                                if (isToday) {
-                                  return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-                                } else if (isYesterday) {
-                                  return `Yesterday ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                                } else {
-                                  return `${date.toLocaleDateString("en-US", { day: "2-digit", month: "2-digit" })} ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                                }
-                              }}
-                            />
-                            <YAxis
-                              tick={{ fontSize: 10 }}
-                              domain={[0, (dataMax: number) => Math.max(dataMax * 1.1, dataMax + 30)]}
-                              tickFormatter={formatYAxisInterval}
-                              ticks={getYAxisTicks(Math.max(...intervalChartData7d.map((d) => d.interval)))}
-                              tickMargin={4}
-                              padding={{ top: 2, bottom: 2 }}
-                            />
-                            <Tooltip
-                              formatter={(v: any, name: any) =>
-                                name === "Trend" ? [null, null] : [formatTimeInterval(v as number), "Deviation"]
-                              }
-                              labelFormatter={(label: any, payload: any) => {
-                                if (payload && payload[0] && payload[0].payload) {
-                                  const d = payload[0].payload
-                                  const date = new Date(d.timestamp)
-                                  return `${date.toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "2-digit" })} at ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                                }
-                                return label
-                              }}
-                              contentStyle={getTooltipContentStyle()}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="interval"
-                              stroke="#8b5cf6"
-                              strokeWidth={2}
-                              dot={(props: any) => {
-                                const { cx, cy, payload } = props
-                                const sideKey = (payload.side ?? "bottle") as keyof typeof sideColors
-                                const sideColor = payload.side ? sideColors[sideKey] : "#8b5cf6"
-                                return (
-                                  <circle
-                                    key={`dot-${payload.timestamp}`}
-                                    cx={cx}
-                                    cy={cy}
-                                    r={4}
-                                    fill={sideColor}
-                                    stroke="white"
-                                    strokeWidth={2}
-                                  />
-                                )
-                              }}
-                              activeDot={{ r: 6, stroke: "white", strokeWidth: 2 }}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="trendLine"
-                              stroke="#94a3b8"
-                              strokeWidth={2}
-                              strokeDasharray="8 4"
-                              dot={false}
-                              activeDot={false}
-                              name="Trend"
-                              opacity={0.6}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-muted-foreground">
-                          <div className="text-center">
-                            <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                            <p>No feedings in 7 days</p>
-                            <p className="text-sm">At least 2 feedings are required</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <FeedingTimeline7d
+                      isDarkMode={isDarkMode}
+                      data={intervalChartData7d as any}
+                      getTooltipContentStyle={getTooltipContentStyle}
+                      formatTimeInterval={formatTimeInterval}
+                      formatYAxisInterval={formatYAxisInterval}
+                      sideColors={sideColors as any}
+                      isNightHour={isNightHour}
+                      getXAxisTicks={getXAxisTicks as any}
+                      getYAxisTicks={getYAxisTicks}
+                    />
                   </TabsContent>
                 </Tabs>
               </div>
@@ -2235,218 +1985,21 @@ export default function FoodTracker() {
             </TabsList>
             
             <TabsContent value="this-week" className="mt-1">
-              <div className="h-[280px] -mt-0.5 -mb-0.5">
-                {last7DaysData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={last7DaysData}
-                      margin={{ top: 8, right: 10, left: 0, bottom: 10 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="date"
-                        angle={-45}
-                        textAnchor="end"
-                        height={60}
-                        fontSize={10}
-                        tick={{ fontSize: 10 }}
-                        interval={0}
-                        tickFormatter={(value: any) => {
-                          const date = new Date(value)
-                          return date.toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' })
-                        }}
-                      />
-                      <YAxis
-                        yAxisId="left"
-                        tick={{ fontSize: 10 }}
-                        domain={[0, (dataMax: number) => Math.max(180, dataMax + 30)]}
-                        padding={{ top: 8, bottom: 0 }}
-                        tickFormatter={(value: number) => {
-                          if (value === 0) return "0min"
-                          if (value === 30) return "30min"
-                          if (value === 60) return "1h"
-                          if (value === 90) return "1h30"
-                          if (value === 120) return "2h"
-                          if (value === 150) return "2h30"
-                          if (value === 180) return "3h"
-                          return formatYAxisInterval(value)
-                        }}
-                        ticks={[0, 30, 60, 90, 120, 150, 180]}
-                      />
-                      {/** Removed right Y axis (variability %) to give more plot width */}
-                      <Tooltip
-                        formatter={(value: any, name: any, props: any) => {
-                          if (name === "☀️ Day") {
-                            const data = props.payload
-                            const roundedMedian = Math.round(value as number)
-                            return [`${formatTimeInterval(roundedMedian)} (avg) - variability ${data.dayCV}%`, name]
-                          } else if (name === "🌙 Night") {
-                            const data = props.payload
-                            const roundedMedian = Math.round(value as number)
-                            return [`${formatTimeInterval(roundedMedian)} (avg) - variability ${data.nightCV}%`, name]
-                          } else if (name === "Day variability %" || name === "Night variability %") {
-                            return [null, null] // Masquer les lignes de variabilité séparées
-                          } else {
-                            return [formatTimeInterval(value as number), name]
-                          }
-                        }}
-                        labelFormatter={(label: any, payload: any) => {
-                          if (payload && payload[0] && payload[0].payload) {
-                            const data = payload[0].payload
-                            const totalCount = data.dayCount + data.nightCount
-                            const date = new Date(data.date)
-                            return (
-                              <div>
-                                <div>{`${date.toLocaleDateString('en-US')} (${totalCount} feedings)`}</div>
-                                <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>
-                                  ☀️ Day: {data.dayCount} feedings • 🌙 Night: {data.nightCount} feedings
-                                </div>
-                              </div>
-                            )
-                          }
-                          return ""
-                        }}
-                        contentStyle={getTooltipContentStyle()}
-                      />
-                      <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="dayMedianInterval"
-                        stroke="#f59e0b"
-                        strokeWidth={3}
-                        dot={{ fill: "#f59e0b", strokeWidth: 2, r: 4 }}
-                        activeDot={{ r: 6, stroke: "#f59e0b", strokeWidth: 2 }}
-                        name="☀️ Day"
-                      />
-                      <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="nightMedianInterval"
-                        stroke="#3b82f6"
-                        strokeWidth={3}
-                        dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
-                        activeDot={{ r: 6, stroke: "#3b82f6", strokeWidth: 2 }}
-                        name="🌙 Night"
-                      />
-                      {/** Variability lines removed from display; values remain available in tooltip via payload.dayCV/nightCV */}
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <div className="text-center">
-                      <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Not enough data over 7 days</p>
-                      <p className="text-xs mt-1">Need at least 2 feedings to calculate intervals</p>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <IntervalStatisticsByDays
+                data={last7DaysData as any}
+                getTooltipContentStyle={getTooltipContentStyle}
+                formatTimeInterval={formatTimeInterval}
+                formatYAxisInterval={formatYAxisInterval}
+              />
             </TabsContent>
             
             <TabsContent value="by-week" className="mt-1">
-              <div className="h-[280px] -mt-0.5 -mb-0.5">
-                {weeklyMedianData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={weeklyMedianData}
-                      margin={{ top: 8, right: 10, left: 0, bottom: 10 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="weekNumber"
-                        angle={-45}
-                        textAnchor="end"
-                        height={60}
-                        fontSize={10}
-                        tick={{ fontSize: 10 }}
-                        interval={0}
-                        tickFormatter={(value: any) => {
-                          return value
-                        }}
-                      />
-                      <YAxis
-                        yAxisId="left"
-                        tick={{ fontSize: 10 }}
-                        domain={[0, (dataMax: number) => Math.max(180, dataMax + 30)]}
-                        padding={{ top: 8, bottom: 0 }}
-                        tickFormatter={(value: number) => {
-                          if (value === 0) return "0min"
-                          if (value === 30) return "30min"
-                          if (value === 60) return "1h"
-                          if (value === 90) return "1h30"
-                          if (value === 120) return "2h"
-                          if (value === 150) return "2h30"
-                          if (value === 180) return "3h"
-                          return formatYAxisInterval(value)
-                        }}
-                        ticks={[0, 30, 60, 90, 120, 150, 180]}
-                      />
-                      {/** Removed right Y axis (variability %) to give more plot width */}
-                      <Tooltip
-                        formatter={(value: any, name: any, props: any) => {
-                          if (name === "☀️ Day") {
-                            const data = props.payload
-                            const roundedMedian = Math.round(value as number)
-                            return [`${formatTimeInterval(roundedMedian)} (median) - variability ${data.dayCV}%`, name]
-                          } else if (name === "🌙 Night") {
-                            const data = props.payload
-                        return [`${formatTimeInterval(Math.round(value as number))} (median) - variability ${data.nightCV}%`, name]
-                          } else if (name === "Day variability %" || name === "Night variability %") {
-                            return [null, null] // Masquer les lignes de variabilité séparées
-                          } else {
-                            return [formatTimeInterval(value as number), name]
-                          }
-                        }}
-                        labelFormatter={(label: any, payload: any) => {
-                          if (payload && payload[0] && payload[0].payload) {
-                            const data = payload[0].payload
-                            const totalCount = data.dayCount + data.nightCount
-                            return (
-                              <div>
-                                <div>{`Week from ${data.weekStart} to ${data.weekEnd} (${totalCount} feedings)`}</div>
-                                <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>
-                                  ☀️ Day: {data.dayCount} feedings • 🌙 Night: {data.nightCount} feedings
-                                </div>
-                              </div>
-                            )
-                          }
-                          return ""
-                        }}
-                        contentStyle={getTooltipContentStyle()}
-                      />
-                      <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="dayMedianInterval"
-                        stroke="#f59e0b"
-                        strokeWidth={3}
-                        dot={{ fill: "#f59e0b", strokeWidth: 2, r: 4 }}
-                        activeDot={{ r: 6, stroke: "#f59e0b", strokeWidth: 2 }}
-                        name="☀️ Day"
-                      />
-                      <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="nightMedianInterval"
-                        stroke="#3b82f6"
-                        strokeWidth={3}
-                        dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
-                        activeDot={{ r: 6, stroke: "#3b82f6", strokeWidth: 2 }}
-                        name="🌙 Night"
-                      />
-                      {/** Variability lines removed from display; values remain available in tooltip via payload.dayCV/nightCV */}
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <div className="text-center">
-                      <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Not enough data over 12 weeks</p>
-                      <p className="text-xs mt-1">Minimum 3 intervals per week</p>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <IntervalStatisticsByWeeks
+                data={weeklyMedianData as any}
+                getTooltipContentStyle={getTooltipContentStyle}
+                formatTimeInterval={formatTimeInterval}
+                formatYAxisInterval={formatYAxisInterval}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -2482,75 +2035,23 @@ export default function FoodTracker() {
 
               {/* 7 jours */}
               <TabsContent value="7d" className="mt-1">
-                <div className="h-[280px] -mt-0.5 -mb-0.5">
-                  {dailyStats7d.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={dailyStats7d}
-                        margin={{ top: 2, right: 10, left: 0, bottom: 10 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} domain={getEvolutionYDomain} />
-                        <Tooltip
-                          formatter={(v: any, name: any) => {
-                            const label = name === "left" ? "Left breast" : name === "right" ? "Right breast" : "Bottle"
-                            return [v, label]
-                          }}
-                          labelFormatter={(label: any, payload: readonly any[]) => {
-                            const p = payload?.[0]?.payload
-                            return p ? `${p.date} — Total: ${p.total}` : ""
-                          }}
-                          contentStyle={getTooltipContentStyle()}
-                        />
-                        <Bar dataKey="left" stackId="tetees" fill={sideColors.left} />
-                        <Bar dataKey="right" stackId="tetees" fill={sideColors.right} />
-                        <Bar dataKey="bottle" stackId="tetees" fill={sideColors.bottle} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      No data available
-                    </div>
-                  )}
-                </div>
+                <EvolutionChart
+                  data={dailyStats7d as any}
+                  sideColors={sideColors as any}
+                  getEvolutionYDomain={getEvolutionYDomain as any}
+                  getTooltipContentStyle={getTooltipContentStyle}
+                />
               </TabsContent>
 
 
               {/* 30 jours */}
               <TabsContent value="30d" className="mt-1">
-                <div className="h-[280px] -mt-0.5 -mb-0.5">
-                  {dailyStats30d.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={dailyStats30d}
-                        margin={{ top: 2, right: 10, left: 0, bottom: 10 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} domain={getEvolutionYDomain} />
-                        <Tooltip
-                          formatter={(v: any, name: any) => {
-                            const label = name === "left" ? "Left breast" : name === "right" ? "Right breast" : "Bottle"
-                            return [v, label]
-                          }}
-                          labelFormatter={(label: any, payload: readonly any[]) => {
-                            const p = payload?.[0]?.payload
-                            return p ? `${p.date} — Total: ${p.total}` : ""
-                          }}
-                          contentStyle={getTooltipContentStyle()}
-                        />
-                        <Bar dataKey="left" stackId="tetees" fill={sideColors.left} />
-                        <Bar dataKey="right" stackId="tetees" fill={sideColors.right} />
-                        <Bar dataKey="bottle" stackId="tetees" fill={sideColors.bottle} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      No data available
-                    </div>
-                  )}
-                </div>
+                <EvolutionChart
+                  data={dailyStats30d as any}
+                  sideColors={sideColors as any}
+                  getEvolutionYDomain={getEvolutionYDomain as any}
+                  getTooltipContentStyle={getTooltipContentStyle}
+                />
               </TabsContent>
             </Tabs>
           </CardContent>
