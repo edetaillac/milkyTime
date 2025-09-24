@@ -51,7 +51,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { PredictionInfoDialog } from "../src/components/PredictionInfoDialog"
 import { MonthlyRecords } from "../src/components/MonthlyRecords"
 import { AppHeader } from "../src/components/AppHeader"
-import { calculateBabyAgeWeeksFromBirthDate, formatBabyAgeFromBirthDate, getUserIdSafelyFromState } from "../src/lib"
+import { calculateBabyAgeWeeksFromBirthDate, formatBabyAgeFromBirthDate, isNightHour } from "../src/lib"
 import { DeleteConfirmDialog } from "../src/components/DeleteConfirmDialog"
 import {
   ResponsiveContainer,
@@ -171,7 +171,15 @@ export default function FoodTracker() {
   }
 
   // Helper robuste: récupère un userId en priorité override > état > localStorage
-  const getUserIdSafely = (override?: string) => getUserIdSafelyFromState(currentUserId, override)
+  const getUserIdSafely = (override?: string) => {
+    if (override && override.length > 0) return override
+    if (currentUserId && currentUserId.length > 0) return currentUserId
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('diaper-user-id')
+      if (stored && stored.length > 0) return stored
+    }
+    return ''
+  }
 
   // Calculate baby age in weeks (via lib)
   const calculateBabyAgeWeeks = () => calculateBabyAgeWeeksFromBirthDate(babyBirthDate)
@@ -180,10 +188,7 @@ export default function FoodTracker() {
   const formatBabyAge = () => formatBabyAgeFromBirthDate(babyBirthDate)
 
   // Détection automatique jour/nuit avec paramètre d'URL
-  const isNightTime = () => {
-    const hour = new Date().getHours()
-    return hour >= 22 || hour < 7
-  }
+  const isNightTime = () => isNightHour(new Date())
   
   // Vérifier le paramètre d'URL pour forcer le thème
   const getInitialTheme = () => {
@@ -547,7 +552,7 @@ export default function FoodTracker() {
         time: timeLabel,
         interval: intervalMinutes,
         hour: date.getHours(),
-        isNight: date.getHours() >= 22 || date.getHours() < 7,
+        isNight: isNightHour(date),
         timestamp: cur.timestamp,
         dateChanged,
         fullDate: date,
@@ -674,7 +679,7 @@ export default function FoodTracker() {
         
         // Déterminer si c'est jour ou nuit (22h-7h = nuit)
         const hour = currentDate.getHours()
-        const isNight = hour >= 22 || hour < 7
+        const isNight = isNightHour(currentDate)
         
         // Grouper par semaine et par période
         if (!weeklyData[weekKey]) {
@@ -1018,7 +1023,7 @@ export default function FoodTracker() {
         const mins = calculateInterval(new Date(cur.timestamp), new Date(prev.timestamp))
         if (mins < 1 || mins > 1440) continue
         const d = new Date(cur.timestamp)
-        const isNight = d.getHours() >= 22 || d.getHours() < 7
+        const isNight = isNightHour(d)
         intervals.push({
           interval: mins,
           isNight,
@@ -1072,7 +1077,7 @@ export default function FoodTracker() {
         
         // 2. Déterminer si c'est jour ou nuit
         const newFeedingTime = new Date(newFeedingTimestamp)
-        const isNight = newFeedingTime.getHours() >= 22 || newFeedingTime.getHours() < 7
+        const isNight = isNightHour(newFeedingTime)
         
         // 3. Utiliser les records fraîchement calculés
         const existingRecords = isNight ? newNight : newDay
@@ -1207,7 +1212,7 @@ export default function FoodTracker() {
   const checkApproachingRecord = async () => {
     if (timeSinceLast === null || timeSinceLast <= 0) return setApproachingRecord(null)
     const now = new Date()
-    const isNight = now.getHours() >= 22 || now.getHours() < 7
+    const isNight = isNightHour(now)
     const relevant = isNight ? records.night : records.day
     if (relevant.length === 0) return setApproachingRecord(null)
     const ranks = ["🥇", "🥈", "🥉"]
@@ -1946,14 +1951,17 @@ export default function FoodTracker() {
                             <CartesianGrid strokeDasharray="3 3" />
                             {intervalChartData24h.length > 0 &&
                               (() => {
-                                const startTime = Math.min(...intervalChartData24h.map((d) => d.numericTime ?? 0))
-                                const endTime = Math.max(...intervalChartData24h.map((d) => d.numericTime ?? 0))
+                                const rawStart = Math.min(...intervalChartData24h.map((d) => d.numericTime ?? 0))
+                                const rawEnd = Math.max(...intervalChartData24h.map((d) => d.numericTime ?? 0))
+                                const startAligned = new Date(rawStart); startAligned.setMinutes(0, 0, 0)
+                                const endAligned = new Date(rawEnd); endAligned.setMinutes(0, 0, 0)
+                                const startMs = startAligned.getTime()
+                                const endMs = endAligned.getTime() + 60 * 60 * 1000
                                 const zones = []
-                                for (let time = startTime; time < endTime; time += 60 * 60 * 1000) {
+                                for (let time = startMs; time <= endMs; time += 60 * 60 * 1000) {
                                   const currentDate = new Date(time)
-                                  const nextTime = Math.min(time + 60 * 60 * 1000, endTime)
-                                  const hour = currentDate.getHours()
-                                  const isNight = hour >= 22 || hour < 7
+                                  const nextTime = Math.min(time + 60 * 60 * 1000, endMs)
+                                  const isNight = isNightHour(currentDate)
                                   zones.push(
                                     <ReferenceArea
                                       key={`zone-${time}`}
@@ -2075,29 +2083,29 @@ export default function FoodTracker() {
                         {/* Zones jour/nuit basées sur les timestamps réels */}
                         {intervalChartData72h.length > 0 &&
                           (() => {
-                            const startTime = Math.min(...intervalChartData72h.map((d) => d.numericTime ?? 0))
-                            const endTime = Math.max(...intervalChartData72h.map((d) => d.numericTime ?? 0))
-                          const zones = []
-                          
-                          // Créer des zones d'1 heure entre le début et la fin
-                          for (let time = startTime; time < endTime; time += 60 * 60 * 1000) {
-                            const currentDate = new Date(time)
-                            const nextTime = Math.min(time + 60 * 60 * 1000, endTime)
-                            const hour = currentDate.getHours()
-                            const isNight = hour >= 22 || hour < 7
-                            
-                            zones.push(
-                              <ReferenceArea
-                                key={`zone-${time}`}
-                                x1={time}
-                                x2={nextTime}
-                                fill={isNight ? "#cbd5e1" : "#fde68a"}
-                                fillOpacity={isNight ? 0.3 : 0.3}
-                                />,
-                            )
-                          }
-                          return zones
-                        })()}
+                            const rawStart = Math.min(...intervalChartData72h.map((d) => d.numericTime ?? 0))
+                            const rawEnd = Math.max(...intervalChartData72h.map((d) => d.numericTime ?? 0))
+                            const startAligned = new Date(rawStart); startAligned.setMinutes(0, 0, 0)
+                            const endAligned = new Date(rawEnd); endAligned.setMinutes(0, 0, 0)
+                            const startMs = startAligned.getTime()
+                            const endMs = endAligned.getTime() + 60 * 60 * 1000
+                            const zones = []
+                            for (let time = startMs; time <= endMs; time += 60 * 60 * 1000) {
+                              const currentDate = new Date(time)
+                              const nextTime = Math.min(time + 60 * 60 * 1000, endMs)
+                              const isNight = isNightHour(currentDate)
+                              zones.push(
+                                <ReferenceArea
+                                  key={`zone-${time}`}
+                                  x1={time}
+                                  x2={nextTime}
+                                  fill={isNight ? "#cbd5e1" : "#fde68a"}
+                                  fillOpacity={isNight ? 0.3 : 0.3}
+                                  />,
+                              )
+                            }
+                            return zones
+                          })()}
 
                         <XAxis
                           type="number"
@@ -2214,14 +2222,17 @@ export default function FoodTracker() {
                             <CartesianGrid strokeDasharray="3 3" />
                             {intervalChartData7d.length > 0 &&
                               (() => {
-                                const startTime = Math.min(...intervalChartData7d.map((d) => d.numericTime ?? 0))
-                                const endTime = Math.max(...intervalChartData7d.map((d) => d.numericTime ?? 0))
+                                const rawStart = Math.min(...intervalChartData7d.map((d) => d.numericTime ?? 0))
+                                const rawEnd = Math.max(...intervalChartData7d.map((d) => d.numericTime ?? 0))
+                                const startAligned = new Date(rawStart); startAligned.setMinutes(0, 0, 0)
+                                const endAligned = new Date(rawEnd); endAligned.setMinutes(0, 0, 0)
+                                const startMs = startAligned.getTime()
+                                const endMs = endAligned.getTime() + 60 * 60 * 1000
                                 const zones = []
-                                for (let time = startTime; time < endTime; time += 60 * 60 * 1000) {
+                                for (let time = startMs; time <= endMs; time += 60 * 60 * 1000) {
                                   const currentDate = new Date(time)
-                                  const nextTime = Math.min(time + 60 * 60 * 1000, endTime)
-                                  const hour = currentDate.getHours()
-                                  const isNight = hour >= 22 || hour < 7
+                                  const nextTime = Math.min(time + 60 * 60 * 1000, endMs)
+                                  const isNight = isNightHour(currentDate)
                                   zones.push(
                                     <ReferenceArea
                                       key={`zone-${time}`}

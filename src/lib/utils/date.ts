@@ -25,7 +25,6 @@ export function formatBabyAgeFromBirthDate(babyBirthDate: string | null | undefi
     if (remainingDays === 0) return `${weeks} semaine${weeks > 1 ? "s" : ""}`
     return `${weeks} week${weeks > 1 ? "s" : ""} ${remainingDays} day${remainingDays > 1 ? "s" : ""}`
   }
-  // Use average month length (30.44 days) as précédemment pour conserver l'affichage détaillé
   const months = Math.floor(diffDays / 30.44)
   const remainingDaysAfterMonths = diffDays % 30.44
   const weeks = Math.floor(remainingDaysAfterMonths / 7)
@@ -37,17 +36,9 @@ export function formatBabyAgeFromBirthDate(babyBirthDate: string | null | undefi
   return parts.join(" ")
 }
 
-export function getUserIdSafelyFromState(
-  currentUserId: string | null | undefined,
-  override?: string,
-): string {
-  if (override && override.length > 0) return override
-  if (currentUserId && currentUserId.length > 0) return currentUserId
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('diaper-user-id')
-    if (stored && stored.length > 0) return stored
-  }
-  return ''
+export function isNightHour(date: Date): boolean {
+  const hour = date.getHours()
+  return hour >= 22 || hour < 7
 }
 
 

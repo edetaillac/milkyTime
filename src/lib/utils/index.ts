@@ -13,3 +13,6 @@ export { getYAxisTicks, getEvolutionYDomain, getXAxisTicks } from './charts'
 
 // Fonctions de logique métier
 export { calculateInterval, getCurrentTimeSlot, getAdaptiveParams } from './business'
+
+// Fonctions de dates (âge bébé, nuit/jour)
+export { calculateBabyAgeWeeksFromBirthDate, formatBabyAgeFromBirthDate, isNightHour } from './date'
