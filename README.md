@@ -162,3 +162,7 @@ mon-app-tetees/
 - Introduce a `FoodTrackerContext` to remove heavy prop drilling and let child components consume only what they need.
 - Break `useFoodTracker` into focused hooks (`useAuthTracker`, `useFeedingData`, `useRecordsNotifications`, …) to honour the single-responsibility principle and ease unit testing.
 - Strengthen typing for the visualisation components (timelines/charts) to remove `any` casts and guarantee compatibility with the data returned by the service.
+
+### Screenshot
+
+![Dashboard screenshot](docs/dashboard.png)
