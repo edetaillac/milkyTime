@@ -4,16 +4,12 @@ import { HydrationWrapper } from "../src/components/HydrationWrapper"
 import {
   sideLabels,
   sideColors,
-  roundToStep,
   sideBadgeVariant,
   formatTimeInterval,
   formatYAxisInterval,
-  getYAxisTicks,
   getEvolutionYDomain,
-  getXAxisTicks,
-  isNightHour,
 } from "../src/lib"
-import { useFoodTracker } from "../src/hooks/useFoodTracker"
+import { FoodTrackerProvider, useFoodTrackerContext } from "../src/hooks/useFoodTrackerContext"
 import { AddFeedingPanel } from "../src/components/AddFeedingPanel"
 import { TodayAndSmartCards } from "../src/components/TodayAndSmartCards"
 import { RecentFeedingsTable } from "../src/components/RecentFeedingsTable"
@@ -41,6 +37,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 // Composant principal
 // ===========================
 export default function FoodTracker() {
+  return (
+    <FoodTrackerProvider>
+      <FoodTrackerView />
+    </FoodTrackerProvider>
+  )
+}
+
+function FoodTrackerView() {
   const {
     isAuthenticated,
     authError,
@@ -59,30 +63,14 @@ export default function FoodTracker() {
     setShowRecordModal,
     deleteConfirmId,
     setDeleteConfirmId,
-    logs,
     logsWithIntervals,
-    todayCount,
     totalLogsCount,
     dailyStats7d,
     dailyStats30d,
-    intervalChartData24h,
-    intervalChartData72h,
-    intervalChartData7d,
     weeklyMedianData,
     last7DaysData,
     records,
-    smartAlerts,
-    probWindowMinutes,
-    expectedIntervalMinutes,
-    reliabilityIndex,
-    approachingRecord,
-    timeSinceLast,
     suggestedSide,
-    wasInWindow,
-    lastTextColor,
-    predictionPointColor,
-    stablePointPosition,
-    predictionLegend,
     error,
     success,
     recordBroken,
@@ -98,11 +86,10 @@ export default function FoodTracker() {
     deleteLog,
     confirmDelete,
     formatTimestamp,
-    formatTimeSinceLast,
     getTooltipContentStyle,
     getRecordIndicator,
     t,
-  } = useFoodTracker()
+  } = useFoodTrackerContext()
 
   if (!isAuthenticated) return <LoginForm onLogin={handleLogin} error={authError ?? undefined} />
   if (loading) {
@@ -238,28 +225,7 @@ export default function FoodTracker() {
       />
 
       {/* Cartes Aujourd'hui + Smart */}
-      <TodayAndSmartCards
-        isDarkMode={isDarkMode}
-        wasInWindow={wasInWindow}
-        todayCount={todayCount}
-        timeSinceLast={timeSinceLast}
-        lastTextColor={lastTextColor}
-        setShowPredictionInfo={setShowPredictionInfo}
-        reliabilityIndex={reliabilityIndex}
-        totalLogsCount={totalLogsCount}
-        logs={logs}
-        expectedIntervalMinutes={expectedIntervalMinutes}
-        smartAlerts={smartAlerts}
-        probWindowMinutes={probWindowMinutes}
-        stablePointPosition={stablePointPosition}
-        predictionPointColor={predictionPointColor}
-        predictionLegend={predictionLegend}
-        approachingRecord={approachingRecord}
-        calculateBabyAgeWeeks={calculateBabyAgeWeeks}
-        formatTimeSinceLast={(m: number) => formatTimeSinceLast(m) ?? ""}
-        formatTimeInterval={formatTimeInterval}
-        roundToStep={roundToStep}
-      />
+      <TodayAndSmartCards />
 
       {/* Interval Evolution */}
         <FeedingTimeline isDarkMode={isDarkMode}>
@@ -272,45 +238,15 @@ export default function FoodTracker() {
                   </TabsList>
 
                   <TabsContent value="24h" className="mt-2">
-                    <FeedingTimeline24h
-                      isDarkMode={isDarkMode}
-                      data={intervalChartData24h as any}
-                      getTooltipContentStyle={getTooltipContentStyle}
-                      formatTimeInterval={formatTimeInterval}
-                      formatYAxisInterval={formatYAxisInterval}
-                      sideColors={sideColors as any}
-                      isNightHour={isNightHour}
-                      getXAxisTicks={getXAxisTicks as any}
-                      getYAxisTicks={getYAxisTicks}
-                    />
+                    <FeedingTimeline24h />
                   </TabsContent>
 
                   <TabsContent value="3d" className="mt-2">
-                    <FeedingTimeline3d
-                      isDarkMode={isDarkMode}
-                      data={intervalChartData72h as any}
-                      getTooltipContentStyle={getTooltipContentStyle}
-                      formatTimeInterval={formatTimeInterval}
-                      formatYAxisInterval={formatYAxisInterval}
-                      sideColors={sideColors as any}
-                      isNightHour={isNightHour}
-                      getXAxisTicks={getXAxisTicks as any}
-                      getYAxisTicks={getYAxisTicks}
-                    />
+                    <FeedingTimeline3d />
                   </TabsContent>
 
                   <TabsContent value="7d" className="mt-2">
-                    <FeedingTimeline7d
-                      isDarkMode={isDarkMode}
-                      data={intervalChartData7d as any}
-                      getTooltipContentStyle={getTooltipContentStyle}
-                      formatTimeInterval={formatTimeInterval}
-                      formatYAxisInterval={formatYAxisInterval}
-                      sideColors={sideColors as any}
-                      isNightHour={isNightHour}
-                      getXAxisTicks={getXAxisTicks as any}
-                      getYAxisTicks={getYAxisTicks}
-                    />
+                    <FeedingTimeline7d />
                   </TabsContent>
                 </Tabs>
               </div>
@@ -343,7 +279,7 @@ export default function FoodTracker() {
             
             <TabsContent value="this-week" className="mt-1">
               <IntervalStatisticsByDays
-                data={last7DaysData as any}
+                data={last7DaysData}
                 getTooltipContentStyle={getTooltipContentStyle}
                 formatTimeInterval={formatTimeInterval}
                 formatYAxisInterval={formatYAxisInterval}
@@ -352,7 +288,7 @@ export default function FoodTracker() {
             
             <TabsContent value="by-week" className="mt-1">
               <IntervalStatisticsByWeeks
-                data={weeklyMedianData as any}
+                data={weeklyMedianData}
                 getTooltipContentStyle={getTooltipContentStyle}
                 formatTimeInterval={formatTimeInterval}
                 formatYAxisInterval={formatYAxisInterval}
@@ -393,9 +329,9 @@ export default function FoodTracker() {
               {/* 7 jours */}
               <TabsContent value="7d" className="mt-1">
                 <EvolutionChart
-                  data={dailyStats7d as any}
-                  sideColors={sideColors as any}
-                  getEvolutionYDomain={getEvolutionYDomain as any}
+                  data={dailyStats7d}
+                  sideColors={sideColors}
+                  getEvolutionYDomain={getEvolutionYDomain}
                   getTooltipContentStyle={getTooltipContentStyle}
                 />
               </TabsContent>
@@ -404,9 +340,9 @@ export default function FoodTracker() {
               {/* 30 jours */}
               <TabsContent value="30d" className="mt-1">
                 <EvolutionChart
-                  data={dailyStats30d as any}
-                  sideColors={sideColors as any}
-                  getEvolutionYDomain={getEvolutionYDomain as any}
+                  data={dailyStats30d}
+                  sideColors={sideColors}
+                  getEvolutionYDomain={getEvolutionYDomain}
                   getTooltipContentStyle={getTooltipContentStyle}
                 />
               </TabsContent>
@@ -417,7 +353,7 @@ export default function FoodTracker() {
       {/* Records */}
       <MonthlyRecords
         isDarkMode={isDarkMode}
-        records={records as any}
+        records={records}
         formatTimeInterval={formatTimeInterval}
       />
 

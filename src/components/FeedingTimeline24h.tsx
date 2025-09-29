@@ -1,37 +1,59 @@
-import { ResponsiveContainer, LineChart, CartesianGrid, ReferenceArea, XAxis, YAxis, Tooltip, Line } from "recharts"
+import React from "react"
+import {
+  ResponsiveContainer,
+  LineChart,
+  CartesianGrid,
+  ReferenceArea,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Line,
+  type TooltipProps,
+  type DotProps,
+} from "recharts"
 import { Activity } from "lucide-react"
-
-interface Datum24h {
-  timestamp: string
-  numericTime?: number
-  interval: number
-  trendLine?: number
-  side?: "left" | "right" | "bottle"
-}
-
-interface FeedingTimeline24hProps {
-  isDarkMode: boolean
-  data: Datum24h[]
-  getTooltipContentStyle: () => any
-  formatTimeInterval: (v: number) => string
-  formatYAxisInterval: (v: number) => string
-  sideColors: Record<string, string>
-  isNightHour: (d: Date) => boolean
-  getXAxisTicks: (data: any[]) => number[]
-  getYAxisTicks: (max: number) => number[]
-}
-
-export function FeedingTimeline24h({
-  isDarkMode,
-  data,
-  getTooltipContentStyle,
+import { useFoodTrackerContext } from "../hooks/useFoodTrackerContext"
+import {
+  sideColors,
   formatTimeInterval,
   formatYAxisInterval,
-  sideColors,
-  isNightHour,
   getXAxisTicks,
   getYAxisTicks,
-}: FeedingTimeline24hProps) {
+  isNightHour,
+  type ProcessedIntervalData,
+} from "../lib"
+
+export function FeedingTimeline24h() {
+  const { intervalChartData24h, getTooltipContentStyle } = useFoodTrackerContext()
+  const data = intervalChartData24h
+
+  const tooltipFormatter: TooltipProps<number, string>["formatter"] = (value, name) => {
+    if (name === "Trend" || value == null) return [null, null]
+    return [formatTimeInterval(value), "Deviation"]
+  }
+
+  const tooltipLabelFormatter: TooltipProps<number, string>["labelFormatter"] = (_label, payload) => {
+    const entry = payload?.[0]?.payload as ProcessedIntervalData | undefined
+    if (entry) {
+      const date = new Date(entry.timestamp)
+      return `${date.toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "2-digit" })} at ${
+        date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+      }`
+    }
+    return ""
+  }
+
+  const renderDot = (props: DotProps) => {
+    const { cx, cy } = props
+    const entry = (props as DotProps & { payload?: ProcessedIntervalData }).payload
+    const safeCx = typeof cx === "number" ? cx : 0
+    const safeCy = typeof cy === "number" ? cy : 0
+    if (!entry) return <circle cx={safeCx} cy={safeCy} r={0} fill="transparent" stroke="transparent" />
+    const sideKey: keyof typeof sideColors = entry.side ?? "bottle"
+    const sideColor = sideColors[sideKey]
+    return <circle cx={safeCx} cy={safeCy} r={6} fill={sideColor} stroke="white" strokeWidth={2} />
+  }
+
   return (
     <div className="h-[280px] -mt-0.5 -mb-0.5">
       {data.length > 0 ? (
@@ -94,15 +116,8 @@ export function FeedingTimeline24h({
               padding={{ top: 2, bottom: 2 }}
             />
             <Tooltip
-              formatter={(v: any, name: any) => (name === "Trend" ? [null, null] : [formatTimeInterval(v as number), "Deviation"])}
-              labelFormatter={(label: any, payload: any) => {
-                if (payload && payload[0] && payload[0].payload) {
-                  const d = payload[0].payload
-                  const date = new Date(d.timestamp)
-                  return `${date.toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "2-digit" })} at ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                }
-                return label
-              }}
+              formatter={tooltipFormatter}
+              labelFormatter={tooltipLabelFormatter}
               contentStyle={getTooltipContentStyle()}
             />
             <Line
@@ -110,12 +125,7 @@ export function FeedingTimeline24h({
               dataKey="interval"
               stroke="#8b5cf6"
               strokeWidth={2}
-              dot={(props: any) => {
-                const { cx, cy, payload } = props
-                const sideKey = (payload.side ?? "bottle") as keyof typeof sideColors
-                const sideColor = payload.side ? sideColors[sideKey] : "#8b5cf6"
-                return <circle key={`dot-${payload.timestamp}`} cx={cx} cy={cy} r={6} fill={sideColor} stroke="white" strokeWidth={2} />
-              }}
+              dot={renderDot}
               activeDot={{ r: 9, stroke: "white", strokeWidth: 2 }}
             />
             <Line type="monotone" dataKey="trendLine" stroke="#94a3b8" strokeWidth={2} strokeDasharray="8 4" dot={false} activeDot={false} name="Trend" opacity={0.6} />
@@ -133,5 +143,3 @@ export function FeedingTimeline24h({
     </div>
   )
 }
-
-

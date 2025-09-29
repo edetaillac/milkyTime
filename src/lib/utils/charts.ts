@@ -53,11 +53,17 @@ export const getEvolutionYDomain = ([dataMin, dataMax]: [number, number]): [numb
 /**
  * Génère les graduations X aux heures pleines pour un graphique temporel
  */
-export const getXAxisTicks = (data: any[]) => {
+export const getXAxisTicks = (data: Array<{ numericTime?: number }>) => {
   if (data.length === 0) return []
-  
-  const startTime = Math.min(...data.map((d) => d.numericTime))
-  const endTime = Math.max(...data.map((d) => d.numericTime))
+
+  const numericTimes = data
+    .map((d) => d.numericTime)
+    .filter((value): value is number => typeof value === "number")
+
+  if (numericTimes.length === 0) return []
+
+  const startTime = Math.min(...numericTimes)
+  const endTime = Math.max(...numericTimes)
   
   const ticks = []
   

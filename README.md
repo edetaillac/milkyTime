@@ -157,11 +157,14 @@ mon-app-tetees/
 - `src/hooks/useFoodTracker.ts`: orchestrates authentication, data loading, record handling and smart alerts, and exposes the values/actions the UI needs.
 - `app/page.tsx`: presentation layer that consumes the hook and wires the sub-components (AddFeedingPanel, TodayAndSmartCards, timelines, etc.).
 
+### ✅ Recent improvements
+
+- Introduced `FoodTrackerContext` to remove heavy prop drilling and let child components consume only what they need.
+- Strengthened typing for the visualisation components (timelines/charts) so they consume the service types without casts.
+
 ### 🔭 Suggested next steps
 
-- Introduce a `FoodTrackerContext` to remove heavy prop drilling and let child components consume only what they need.
 - Break `useFoodTracker` into focused hooks (`useAuthTracker`, `useFeedingData`, `useRecordsNotifications`, …) to honour the single-responsibility principle and ease unit testing.
-- Strengthen typing for the visualisation components (timelines/charts) to remove `any` casts and guarantee compatibility with the data returned by the service.
 
 ### Screenshot
 

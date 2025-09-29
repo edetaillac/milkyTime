@@ -1,12 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, type CSSProperties } from "react"
 import {
   type FoodLog,
   type FoodLogWithInterval,
   type RecordBroken,
   type DailyStatsData,
-  type IntervalChartData,
   type WeeklyMedianData,
   type Last7DaysData,
   type ApproachingRecord,
@@ -68,9 +67,9 @@ export function useFoodTracker() {
 
   const [approachingRecord, setApproachingRecord] = useState<ApproachingRecord | null>(null)
 
-  const [intervalChartData24h, setIntervalChartData24h] = useState<IntervalChartData[]>([])
-  const [intervalChartData72h, setIntervalChartData72h] = useState<IntervalChartData[]>([])
-  const [intervalChartData7d, setIntervalChartData7d] = useState<IntervalChartData[]>([])
+  const [intervalChartData24h, setIntervalChartData24h] = useState<ProcessedIntervalData[]>([])
+  const [intervalChartData72h, setIntervalChartData72h] = useState<ProcessedIntervalData[]>([])
+  const [intervalChartData7d, setIntervalChartData7d] = useState<ProcessedIntervalData[]>([])
 
   const [recordBroken, setRecordBroken] = useState<RecordBroken | null>(null)
   const [showRecordModal, setShowRecordModal] = useState(false)
@@ -1194,7 +1193,7 @@ export function useFoodTracker() {
   }, [])
 
   // Fonction helper pour les contentStyle des tooltips - Mémorisée
-  const getTooltipContentStyle = useCallback(() => ({
+  const getTooltipContentStyle = useCallback((): CSSProperties => ({
     backgroundColor: isDarkMode ? "#1f2937" : "white",
     border: isDarkMode ? "1px solid #4b5563" : "1px solid #ccc",
     borderRadius: "6px",

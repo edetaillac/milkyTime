@@ -12,47 +12,23 @@ import {
   ReferenceArea,
   Tooltip,
 } from "recharts"
-import { type FoodLog, type ApproachingRecord, type SmartAlerts } from "../lib/types"
 import React from "react"
+import { useFoodTrackerContext } from "../hooks/useFoodTrackerContext"
+import { roundToStep, formatTimeInterval } from "../lib"
 
-interface TodayAndSmartCardsProps {
-  isDarkMode: boolean
-  wasInWindow: boolean
-  todayCount: number
-  timeSinceLast: number | null
-  lastTextColor: string
-  formatTimeSinceLast: (mins: number) => string
-  reliabilityIndex: number | null
-  setShowPredictionInfo: (open: boolean) => void
-  totalLogsCount: number
-  expectedIntervalMinutes: number | null
-  probWindowMinutes: number | null
-  roundToStep: (n: number) => number
-  formatTimeInterval: (n: number) => string
-  logs: FoodLog[]
-  smartAlerts: SmartAlerts
-  predictionPointColor: string
-  stablePointPosition: number
-  predictionLegend: { start: string; end: string }
-  calculateBabyAgeWeeks: () => number
-  approachingRecord: ApproachingRecord | null
-}
-
-export function TodayAndSmartCards(props: TodayAndSmartCardsProps) {
+export function TodayAndSmartCards() {
   const {
     isDarkMode,
     wasInWindow,
     todayCount,
     timeSinceLast,
     lastTextColor,
-    formatTimeSinceLast,
+    formatTimeSinceLast: formatTimeSinceLastRaw,
     reliabilityIndex,
     setShowPredictionInfo,
     totalLogsCount,
     expectedIntervalMinutes,
     probWindowMinutes,
-    roundToStep,
-    formatTimeInterval,
     logs,
     smartAlerts,
     predictionPointColor,
@@ -60,7 +36,9 @@ export function TodayAndSmartCards(props: TodayAndSmartCardsProps) {
     predictionLegend,
     calculateBabyAgeWeeks,
     approachingRecord,
-  } = props
+  } = useFoodTrackerContext()
+
+  const formatTimeSinceLast = (mins: number) => formatTimeSinceLastRaw(mins) ?? ""
 
   const lastFeedingTime = logs.length > 0 ? new Date(logs[0].timestamp) : new Date()
 
@@ -246,5 +224,3 @@ export function TodayAndSmartCards(props: TodayAndSmartCardsProps) {
     </div>
   )
 }
-
-

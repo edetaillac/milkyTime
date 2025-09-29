@@ -1,40 +1,60 @@
-import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Line } from "recharts"
+import { useMemo, type CSSProperties } from "react"
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Line, type TooltipProps } from "recharts"
 import { Activity } from "lucide-react"
-
-interface DayPoint {
-  date: string
-  dayMedianInterval: number
-  nightMedianInterval: number
-  dayCount: number
-  nightCount: number
-  dayCV: number
-  nightCV: number
-}
+import type { Last7DaysData } from "../lib"
 
 interface IntervalStatisticsByDaysProps {
-  data: DayPoint[]
-  getTooltipContentStyle: () => any
+  data: Last7DaysData[]
+  getTooltipContentStyle: () => CSSProperties
   formatTimeInterval: (v: number) => string
   formatYAxisInterval: (v: number) => string
 }
 
 export function IntervalStatisticsByDays({ data, getTooltipContentStyle, formatTimeInterval, formatYAxisInterval }: IntervalStatisticsByDaysProps) {
+  const { yMax, yTicks } = useMemo(() => {
+    if (data.length === 0) return { yMax: 180, yTicks: Array.from({ length: 7 }, (_, i) => i * 30) }
+
+    const maxInData = data.reduce((acc, point) => Math.max(acc, point.dayMedianInterval, point.nightMedianInterval), 0)
+    const ceilTo30 = (value: number) => Math.ceil(value / 30) * 30
+    const computedMax = Math.max(180, ceilTo30(maxInData))
+    const ticks = Array.from({ length: computedMax / 30 + 1 }, (_, index) => index * 30)
+
+    return { yMax: computedMax, yTicks: ticks }
+  }, [data])
+
+  const tooltipFormatter: TooltipProps<number, string>["formatter"] = (value, name, item) => {
+    if (value == null) return null
+    const point = item?.payload as Last7DaysData | undefined
+    if (name === "☀️ Day" && point) {
+      return [`${formatTimeInterval(Math.round(value))} (avg) - variability ${point.dayCV}%`, name]
+    }
+    if (name === "🌙 Night" && point) {
+      return [`${formatTimeInterval(Math.round(value))} (avg) - variability ${point.nightCV}%`, name]
+    }
+    return [formatTimeInterval(value), name]
+  }
+
+  const tooltipLabelFormatter: TooltipProps<number, string>["labelFormatter"] = (_label, payload) => {
+    const point = payload?.[0]?.payload as Last7DaysData | undefined
+    if (!point) return ""
+
+    const totalCount = point.dayCount + point.nightCount
+    const date = new Date(point.date)
+    return (
+      <div>
+        <div>{`${date.toLocaleDateString("en-US")} (${totalCount} feedings)`}</div>
+        <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px" }}>
+          ☀️ Day: {point.dayCount} feedings • 🌙 Night: {point.nightCount} feedings
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-[280px] -mt-0.5 -mb-0.5">
       {data.length > 0 ? (
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 10 }}>
-            {(() => {
-              // Calcul dynamique des ticks Y (toutes les 30min) jusqu'au prochain palier >= max
-              const maxInData = data.reduce((acc, d) => Math.max(acc, d.dayMedianInterval, d.nightMedianInterval), 0)
-              const ceilTo30 = (v: number) => Math.ceil(v / 30) * 30
-              const yMax = Math.max(180, ceilTo30(maxInData))
-              const yTicks = Array.from({ length: yMax / 30 + 1 }, (_, i) => i * 30)
-              // Injecter via variables dans le scope du JSX suivant
-              ;(LineChart as any).yMaxDays = yMax
-              ;(LineChart as any).yTicksDays = yTicks
-              return null
-            })()}
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
@@ -44,15 +64,15 @@ export function IntervalStatisticsByDays({ data, getTooltipContentStyle, formatT
               fontSize={10}
               tick={{ fontSize: 10 }}
               interval={0}
-              tickFormatter={(value: any) => {
+              tickFormatter={(value: string) => {
                 const date = new Date(value)
-                return date.toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' })
+                return date.toLocaleDateString("en-US", { day: "2-digit", month: "2-digit" })
               }}
             />
             <YAxis
               yAxisId="left"
               tick={{ fontSize: 10 }}
-              domain={[0, (LineChart as any).yMaxDays]}
+              domain={[0, yMax]}
               padding={{ top: 8, bottom: 0 }}
               tickFormatter={(value: number) => {
                 if (value === 0) return "0min"
@@ -64,37 +84,11 @@ export function IntervalStatisticsByDays({ data, getTooltipContentStyle, formatT
                 if (value === 180) return "3h"
                 return formatYAxisInterval(value)
               }}
-              ticks={(LineChart as any).yTicksDays}
+              ticks={yTicks}
             />
             <Tooltip
-              formatter={(value: any, name: any, props: any) => {
-                if (name === "☀️ Day") {
-                  const d = props.payload
-                  const rounded = Math.round(value as number)
-                  return [`${formatTimeInterval(rounded)} (avg) - variability ${d.dayCV}%`, name]
-                } else if (name === "🌙 Night") {
-                  const d = props.payload
-                  const rounded = Math.round(value as number)
-                  return [`${formatTimeInterval(rounded)} (avg) - variability ${d.nightCV}%`, name]
-                }
-                return [formatTimeInterval(value as number), name]
-              }}
-              labelFormatter={(label: any, payload: any) => {
-                if (payload && payload[0] && payload[0].payload) {
-                  const d = payload[0].payload as DayPoint
-                  const totalCount = d.dayCount + d.nightCount
-                  const date = new Date(d.date)
-                  return (
-                    <div>
-                      <div>{`${date.toLocaleDateString('en-US')} (${totalCount} feedings)`}</div>
-                      <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px' }}>
-                        ☀️ Day: {d.dayCount} feedings • 🌙 Night: {d.nightCount} feedings
-                      </div>
-                    </div>
-                  )
-                }
-                return ""
-              }}
+              formatter={tooltipFormatter}
+              labelFormatter={tooltipLabelFormatter}
               contentStyle={getTooltipContentStyle()}
             />
             <Line
@@ -131,5 +125,3 @@ export function IntervalStatisticsByDays({ data, getTooltipContentStyle, formatT
     </div>
   )
 }
-
-
