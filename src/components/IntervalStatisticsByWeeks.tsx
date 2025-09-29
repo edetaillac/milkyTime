@@ -26,6 +26,16 @@ export function IntervalStatisticsByWeeks({ data, getTooltipContentStyle, format
       {data.length > 0 ? (
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 10 }}>
+            {(() => {
+              // Calcul dynamique des ticks Y (toutes les 30min) jusqu'au prochain palier >= max
+              const maxInData = data.reduce((acc, d) => Math.max(acc, d.dayMedianInterval, d.nightMedianInterval), 0)
+              const ceilTo30 = (v: number) => Math.ceil(v / 30) * 30
+              const yMax = Math.max(180, ceilTo30(maxInData))
+              const yTicks = Array.from({ length: yMax / 30 + 1 }, (_, i) => i * 30)
+              ;(LineChart as any).yMaxWeeks = yMax
+              ;(LineChart as any).yTicksWeeks = yTicks
+              return null
+            })()}
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="weekNumber"
@@ -40,7 +50,7 @@ export function IntervalStatisticsByWeeks({ data, getTooltipContentStyle, format
             <YAxis
               yAxisId="left"
               tick={{ fontSize: 10 }}
-              domain={[0, (dataMax: number) => Math.max(180, dataMax + 30)]}
+              domain={[0, (LineChart as any).yMaxWeeks]}
               padding={{ top: 8, bottom: 0 }}
               tickFormatter={(value: number) => {
                 if (value === 0) return "0min"
@@ -52,7 +62,7 @@ export function IntervalStatisticsByWeeks({ data, getTooltipContentStyle, format
                 if (value === 180) return "3h"
                 return formatYAxisInterval(value)
               }}
-              ticks={[0, 30, 60, 90, 120, 150, 180]}
+              ticks={(LineChart as any).yTicksWeeks}
             />
             <Tooltip
               formatter={(value: any, name: any, props: any) => {
