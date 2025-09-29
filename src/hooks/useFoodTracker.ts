@@ -327,7 +327,7 @@ export function useFoodTracker() {
   // ===========================
   // Logique de recommandation de sein (alternance intelligente)
   // ===========================
-  const suggestedSide = useMemo(() => {
+  const suggestedSide: "left" | "right" = useMemo<"left" | "right">(() => {
     // Si pas de dernière tétée, commencer par le sein gauche
     if (!lastFeedingSide) return "left"
     
