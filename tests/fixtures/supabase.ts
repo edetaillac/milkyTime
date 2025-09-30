@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 
 // ===========================
 // Configuration Supabase pour les tests
@@ -67,10 +68,10 @@ export interface TestUser {
 }
 
 // ===========================
-// Données de test - Cohérentes avec USERS_DATA
+// Données de test pour les scénarios Playwright
 // ===========================
 
-// Utilisateur de test (doit correspondre à USERS_DATA dans .env.test)
+// Utilisateur de test (inséré dans app_users via ensureTestUser)
 export const TEST_USERS = {
   default: {
     id: "550e8400-e29b-41d4-a716-446655440001",
@@ -81,6 +82,33 @@ export const TEST_USERS = {
 } as const
 
 export const DEFAULT_USER_ID = TEST_USERS.default.id
+
+const TEST_USER_HASH_ROUNDS = 10
+let cachedTestUserHash: string | null = null
+
+async function ensureTestUser() {
+  const user = TEST_USERS.default
+  if (!cachedTestUserHash) {
+    cachedTestUserHash = bcrypt.hashSync(user.password, TEST_USER_HASH_ROUNDS)
+  }
+
+  const { error } = await supabase
+    .from('app_users')
+    .upsert(
+      {
+        id: user.id,
+        username: user.username,
+        password_hash: cachedTestUserHash,
+        baby_birth_date: user.babyBirthDate,
+      },
+      { onConflict: 'id' }
+    )
+
+  if (error) {
+    console.error('Erreur lors de la synchronisation de l’utilisateur de test:', error)
+    throw error
+  }
+}
 
 export const TEST_FEEDINGS: TestFeeding[] = [
   {
@@ -161,6 +189,8 @@ export async function cleanupTestData() {
     } else {
       console.log("✅ Données de test nettoyées (mois courant, utilisateur de test)")
     }
+
+    await ensureTestUser()
   } catch (error) {
     console.error("Erreur lors du nettoyage:", error)
     throw error
@@ -172,6 +202,8 @@ export async function cleanupTestData() {
  */
 export async function seedTestData(feedings: TestFeeding[] = TEST_FEEDINGS) {
   try {
+    await ensureTestUser()
+
     const withUserIds = feedings.map((f) => ({
       ...f,
       user_id: f.user_id ?? DEFAULT_USER_ID,

@@ -1,26 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
 
-interface User {
+import { getSupabaseClient } from '@/src/lib/supabase/client'
+
+type AppUserRow = {
   id: string
   username: string
-  password: string
-  babyBirthDate: string
-}
-
-// Récupérer les utilisateurs depuis la variable d'environnement (côté serveur)
-const getUsers = (): User[] => {
-  try {
-    const usersData = process.env.USERS_DATA
-    if (!usersData) {
-      console.error('❌ USERS_DATA environment variable not found')
-      return []
-    }
-    
-    return JSON.parse(usersData)
-  } catch (error) {
-    console.error('❌ Error parsing USERS_DATA:', error)
-    return []
-  }
+  password_hash: string
+  baby_birth_date: string | null
 }
 
 export async function POST(request: NextRequest) {
@@ -34,8 +21,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const users = getUsers()
-    const user = users.find(u => u.username === username && u.password === password)
+    const supabase = getSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('app_users')
+      .select('id, username, password_hash, baby_birth_date')
+      .eq('username', username)
+      .maybeSingle()
+
+    const user = data as AppUserRow | null
+
+    if (error) {
+      console.error('❌ Error fetching user from Supabase:', error)
+      return NextResponse.json(
+        { error: 'Authentication service unavailable' },
+        { status: 500 }
+      )
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -44,9 +46,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Retourner les données utilisateur sans le mot de passe
-    const { password: _, ...userWithoutPassword } = user
-    return NextResponse.json({ user: userWithoutPassword })
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash)
+
+    if (!isPasswordValid) {
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      )
+    }
+
+    const userPayload = {
+      id: user.id,
+      username: user.username,
+      babyBirthDate: user.baby_birth_date ?? '',
+    }
+
+    return NextResponse.json({ user: userPayload })
 
   } catch (error) {
     console.error('Auth error:', error)

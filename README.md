@@ -53,10 +53,16 @@ Copy `.env.example` to `.env.development`:
 # Supabase (production database)
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_production_key
-
-# Users (JSON format)
-USERS_DATA=[{"id":"...","username":"...","password":"...","babyBirthDate":"2025-07-25"}]
 ```
+
+Users are stored directly in Supabase. Seed the table `app_users` with hashed passwords, for example:
+
+```sql
+insert into app_users (username, password_hash, baby_birth_date)
+values ('<USERNAME>>', '<HASH>', '<BABY_BIRTH_DATE>');
+```
+
+Use `npx bcryptjs-cli hash "your-password"` (or any other bcrypt helper) to generate `<HASH>`.
 
 ### 🧪 **Testing Environment (Secure)**
 
@@ -66,10 +72,9 @@ Copy `env.test.example` to `.env.test`:
 # Supabase (SEPARATE test database - CRITICAL!)
 NEXT_PUBLIC_SUPABASE_URL=https://your-TEST-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_test_key
-
-# Test users (different from production!)
-USERS_DATA=[{"id":"...","username":"test","password":"test","babyBirthDate":"2025-07-25"}]
 ```
+
+Playwright fixtures automatically upsert the default `test` user into `app_users`. Make sure the table exists (see `scripts/database.sql`).
 
 ⚠️ **IMPORTANT:** Always use a **separate Supabase project** for tests to avoid data loss!
 

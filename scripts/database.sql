@@ -22,3 +22,11 @@ WHERE user_id IS NULL;
 -- Rendre la colonne user_id obligatoire (à faire après avoir mis à jour les données existantes)
 -- ALTER TABLE public.food_logs 
 -- ALTER COLUMN user_id SET NOT NULL;
+
+create table if not exists app_users (
+    id uuid primary key default gen_random_uuid(),
+    username text unique not null,
+    password_hash text not null,
+    baby_birth_date date,
+    created_at timestamptz default now()
+    );
