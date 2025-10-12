@@ -39,6 +39,20 @@ export function IntervalStatisticsByWeeks({ data, getTooltipContentStyle, format
     if (!point) return ""
 
     const totalCount = point.dayCount + point.nightCount
+    const rangeLabel = `${point.weekStart} to ${point.weekEnd}`
+
+    if (typeof point.ageWeekIndex === "number") {
+      const weekNumber = point.ageWeekIndex + 1
+      return (
+        <div>
+          <div>{`Age week ${weekNumber} • ${rangeLabel} (${totalCount} feedings)`}</div>
+          <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px" }}>
+            ☀️ Day: {point.dayCount} feedings • 🌙 Night: {point.nightCount} feedings
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div>
         <div>{`Week from ${point.weekStart} to ${point.weekEnd} (${totalCount} feedings)`}</div>
@@ -63,7 +77,12 @@ export function IntervalStatisticsByWeeks({ data, getTooltipContentStyle, format
               fontSize={10}
               tick={{ fontSize: 10 }}
               interval={0}
-              tickFormatter={(value: string) => value}
+              tickFormatter={(value: string) => {
+                if (/^W\d+$/i.test(value)) {
+                  return `Week ${parseInt(value.slice(1), 10)}`
+                }
+                return value
+              }}
             />
             <YAxis
               yAxisId="left"

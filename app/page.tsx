@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PredictionInfoDialog } from "../src/components/PredictionInfoDialog"
+import { BedtimeInfoDialog } from "../src/components/BedtimeInfoDialog"
 import { MonthlyRecords } from "../src/components/MonthlyRecords"
 import { AppHeader } from "../src/components/AppHeader"
 import { FeedingTimeline } from "../src/components/FeedingTimeline"
@@ -88,6 +89,9 @@ function FoodTrackerView() {
     formatTimestamp,
     getTooltipContentStyle,
     getRecordIndicator,
+    bedtimePrediction,
+    showBedtimeInfo,
+    setShowBedtimeInfo,
     t,
   } = useFoodTrackerContext()
 
@@ -382,6 +386,12 @@ function FoodTrackerView() {
         open={showPredictionInfo}
         onOpenChange={setShowPredictionInfo}
         totalLogsCount={totalLogsCount}
+        calculateBabyAgeWeeks={calculateBabyAgeWeeks}
+      />
+      <BedtimeInfoDialog
+        open={showBedtimeInfo}
+        onOpenChange={setShowBedtimeInfo}
+        bedtimePrediction={bedtimePrediction}
         calculateBabyAgeWeeks={calculateBabyAgeWeeks}
       />
             </div>

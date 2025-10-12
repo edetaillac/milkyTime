@@ -73,6 +73,7 @@ export interface WeeklyMedianData {
   weekStart: string
   weekEnd: string
   weekNumber: string
+  ageWeekIndex?: number
   dayMedianInterval: number
   nightMedianInterval: number
   dayCount: number

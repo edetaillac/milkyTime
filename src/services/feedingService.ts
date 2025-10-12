@@ -213,7 +213,7 @@ export async function fetchIntervalChartData(userId: string, period: IntervalPer
   return processIntervalData(logs as FoodLog[], period)
 }
 
-export async function calculateWeeklyMedianData(userId: string): Promise<WeeklyMedianData[]> {
+export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: string): Promise<WeeklyMedianData[]> {
   try {
     const twelveWeeksAgo = new Date()
     twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84)
@@ -237,13 +237,77 @@ export async function calculateWeeklyMedianData(userId: string): Promise<WeeklyM
       .slice()
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
-    const weeklyData: Record<string, { day: number[]; night: number[] }> = {}
+    const birthDate = (() => {
+      if (!babyBirthDate) return null
+      const parts = babyBirthDate.split("-")
+      if (parts.length !== 3) return null
+      const [year, month, day] = parts.map((part) => parseInt(part, 10))
+      if ([year, month, day].some((value) => Number.isNaN(value))) return null
+      const parsed = new Date(year, month - 1, day)
+      if (Number.isNaN(parsed.getTime())) return null
+      parsed.setHours(0, 0, 0, 0)
+      return parsed
+    })()
+
+    const buildWeekInfo = (referenceDate: Date) => {
+      if (birthDate) {
+        const diffMs = referenceDate.getTime() - birthDate.getTime()
+        if (diffMs >= 0) {
+          const weekIndex = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000))
+          const computedStart = new Date(birthDate)
+          computedStart.setDate(computedStart.getDate() + weekIndex * 7)
+          computedStart.setHours(0, 0, 0, 0)
+          const computedEnd = new Date(computedStart)
+          computedEnd.setDate(computedEnd.getDate() + 6)
+          const computedEndCopy = new Date(computedEnd)
+          computedEndCopy.setHours(23, 59, 59, 999)
+          return {
+            key: `birth-${weekIndex}`,
+            weekStartDate: computedStart,
+            weekEndDate: computedEndCopy,
+            weekNumber: `W${(weekIndex + 1).toString().padStart(2, "0")}`,
+            sortKey: computedStart.getTime(),
+            ageWeekIndex: weekIndex,
+          }
+        }
+      }
+
+      const weekStart = getWeekStart(referenceDate)
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      const weekNumber = getISOWeek(weekStart)
+      return {
+        key: `${weekStart.getFullYear()}-${pad2(weekStart.getMonth() + 1)}-${pad2(weekStart.getDate())}`,
+        weekStartDate: weekStart,
+        weekEndDate: weekEnd,
+        weekNumber: `${weekStart.getFullYear()}W${weekNumber.toString().padStart(2, "0")}`,
+        sortKey: weekStart.getTime(),
+        ageWeekIndex: undefined,
+      }
+    }
+
+    const weeklyData: Record<
+      string,
+      {
+        day: number[]
+        night: number[]
+        meta: {
+          weekStartDate: Date
+          weekEndDate: Date
+          weekNumber: string
+          sortKey: number
+          ageWeekIndex?: number
+        }
+      }
+    > = {}
 
     for (let index = 0; index < sorted.length; index += 1) {
       const currentFeeding = sorted[index]
       const currentDate = new Date(currentFeeding.timestamp)
-      const weekStart = getWeekStart(currentDate)
-      const weekKey = `${weekStart.getFullYear()}-${pad2(weekStart.getMonth() + 1)}-${pad2(weekStart.getDate())}`
+      const weekInfo = buildWeekInfo(currentDate)
+      if (!weekInfo) {
+        continue
+      }
 
       let interval = 0
       if (index < sorted.length - 1) {
@@ -252,24 +316,40 @@ export async function calculateWeeklyMedianData(userId: string): Promise<WeeklyM
         interval = Math.round((currentDate.getTime() - previousDate.getTime()) / (1000 * 60))
       }
 
-      const isNight = isNightHour(currentDate)
+      const bucket =
+        weeklyData[weekInfo.key] ??
+        (weeklyData[weekInfo.key] = {
+          day: [],
+          night: [],
+          meta: {
+            weekStartDate: weekInfo.weekStartDate,
+            weekEndDate: weekInfo.weekEndDate,
+            weekNumber: weekInfo.weekNumber,
+            sortKey: weekInfo.sortKey,
+            ageWeekIndex: weekInfo.ageWeekIndex,
+          },
+        })
 
-      if (!weeklyData[weekKey]) {
-        weeklyData[weekKey] = { day: [], night: [] }
+      bucket.meta.weekStartDate = weekInfo.weekStartDate
+      bucket.meta.weekEndDate = weekInfo.weekEndDate
+      bucket.meta.weekNumber = weekInfo.weekNumber
+      bucket.meta.sortKey = weekInfo.sortKey
+      if (weekInfo.ageWeekIndex !== undefined) {
+        bucket.meta.ageWeekIndex = weekInfo.ageWeekIndex
       }
 
       if (interval > 0) {
-        if (isNight) {
-          weeklyData[weekKey].night.push(interval)
+        if (isNightHour(currentDate)) {
+          bucket.night.push(interval)
         } else {
-          weeklyData[weekKey].day.push(interval)
+          bucket.day.push(interval)
         }
       }
     }
 
-    const weeklyStats: WeeklyMedianData[] = Object.entries(weeklyData)
-      .filter(([, data]) => data.day.length >= 1 || data.night.length >= 1)
-      .map(([weekStartKey, data]) => {
+    const weeklyStats: WeeklyMedianData[] = Object.values(weeklyData)
+      .filter((data) => data.day.length >= 1 || data.night.length >= 1)
+      .map((data) => {
         const dayIntervals = data.day.sort((a, b) => a - b)
         const nightIntervals = data.night.sort((a, b) => a - b)
 
@@ -307,18 +387,13 @@ export async function calculateWeeklyMedianData(userId: string): Promise<WeeklyM
 
         const dayStats = mapData(dayIntervals)
         const nightStats = mapData(nightIntervals)
-
-        const weekStartDate = new Date(weekStartKey)
-        const weekEndDate = new Date(weekStartDate)
-        weekEndDate.setDate(weekEndDate.getDate() + 6)
-
-        const weekNumber = getISOWeek(weekStartDate)
-        const year = weekStartDate.getFullYear()
+        const { weekStartDate, weekEndDate, weekNumber, sortKey, ageWeekIndex } = data.meta
 
         return {
           weekStart: weekStartDate.toLocaleDateString("en-US", { day: "2-digit", month: "2-digit" }),
           weekEnd: weekEndDate.toLocaleDateString("en-US", { day: "2-digit", month: "2-digit" }),
-          weekNumber: `${year}W${weekNumber.toString().padStart(2, "0")}`,
+          weekNumber,
+          ageWeekIndex,
           dayMedianInterval: dayIntervals.length > 0 ? dayStats.median : 0,
           nightMedianInterval: nightIntervals.length > 0 ? nightStats.median : 0,
           dayCount: dayIntervals.length,
@@ -333,16 +408,11 @@ export async function calculateWeeklyMedianData(userId: string): Promise<WeeklyM
           nightCV: nightStats.cv,
           dayStdDev: dayStats.stdDev,
           nightStdDev: nightStats.stdDev,
+          sortKey,
         }
       })
-      .sort((a, b) => {
-        const [yearA, weekA] = a.weekNumber.split("W").map((part) => parseInt(part, 10))
-        const [yearB, weekB] = b.weekNumber.split("W").map((part) => parseInt(part, 10))
-        if (yearA === yearB) {
-          return weekA - weekB
-        }
-        return yearA - yearB
-      })
+      .sort((a, b) => (a.sortKey ?? 0) - (b.sortKey ?? 0))
+      .map(({ sortKey: _sortKey, ...rest }) => rest)
 
     return weeklyStats
   } catch (error) {
