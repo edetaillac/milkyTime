@@ -100,6 +100,7 @@ export function TodayAndSmartCards() {
     const chartStart = Math.max(0, Math.min(windowStartMinutes, currentMinutes) - 60)
     const chartEnd = Math.min(24 * 60, Math.max(windowEndMinutes, currentMinutes) + 60)
     const showPoint = currentMinutes >= chartStart && currentMinutes <= chartEnd
+    const windowTextColor = isDarkMode ? "#c7d2fe" : "#4338ca"
 
     return (
       <>
@@ -107,7 +108,7 @@ export function TodayAndSmartCards() {
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${isDarkMode ? "bg-indigo-900/40" : "bg-indigo-100"}`}>
             <MoonStar className={`h-6 w-6 ${isDarkMode ? "text-indigo-200" : "text-indigo-600"}`} />
           </div>
-          <div className="flex-1 text-xl font-semibold">
+          <div className="flex-1 text-xl font-semibold" style={{ color: windowTextColor }}>
             {formatWindowMinutes(windowStartMinutes)} – {formatWindowMinutes(windowEndMinutes)}
           </div>
         </div>
@@ -296,22 +297,24 @@ export function TodayAndSmartCards() {
             }`}
           >
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground uppercase tracking-wide">Last night feed window</span>
-                <span className="text-[10px] text-muted-foreground">
-                  (30 days · {bedtimePrediction?.status === "ready"
-                    ? `Based on ${bedtimePrediction.sampleSize} nights`
-                    : "Learning"})
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowBedtimeInfo(true)}
-                  className="h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
-                  title="How is bedtime predicted?"
-                >
-                  <Info className="h-3 w-3" />
-                </Button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Last feed before bedtime</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowBedtimeInfo(true)}
+                    className="h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
+                    title="How is bedtime predicted?"
+                  >
+                    <Info className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground">
+                  {bedtimePrediction?.status === "ready"
+                    ? `Based on last 30 d • ${bedtimePrediction.sampleSize} night${bedtimePrediction.sampleSize > 1 ? "s" : ""}`
+                    : "Based on last 30 d · learning"}
+                </div>
               </div>
               {bedtimePrediction?.status === "ready" && bedtimePrediction.reliability !== null && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
