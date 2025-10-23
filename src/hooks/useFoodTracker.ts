@@ -904,6 +904,86 @@ export function useFoodTracker() {
     }
   }, [])
 
+  const addBatchLogs = useCallback(
+    async (entries: Array<{ timestamp: string; side?: "left" | "right" | "bottle" }>) => {
+      const isAuthFromState = isAuthenticated
+      const isAuthFromStorage = typeof window !== "undefined" && localStorage.getItem("diaper-auth") === "true"
+      const isUserAuthenticated = isAuthFromState || isAuthFromStorage
+
+      if (!isUserAuthenticated) {
+        console.error("❌ ERROR - User not authenticated in addBatchLogs!")
+        setError("User not connected")
+        return
+      }
+
+      const userIdToUse = currentUserId || (typeof window !== "undefined" ? localStorage.getItem("diaper-user-id") ?? "" : "")
+
+      if (!userIdToUse) {
+        console.error("❌ ERROR - currentUserId is not set in addBatchLogs!")
+        setError("User not connected")
+        return
+      }
+
+      if (!entries || entries.length === 0) {
+        setError("No feedings to save")
+        return
+      }
+
+      setSubmitting(true)
+      setError(null)
+      setSuccess(null)
+
+      try {
+        const sanitized = entries
+          .filter((entry) => entry && entry.timestamp)
+          .map((entry) => {
+            const side = entry.side ?? "bottle"
+            const timestamp = new Date(entry.timestamp)
+
+            if (Number.isNaN(timestamp.getTime())) {
+              throw new Error("Invalid date or time provided")
+            }
+
+            return { side, timestampIso: timestamp.toISOString() }
+          })
+          .sort((a, b) => new Date(a.timestampIso).getTime() - new Date(b.timestampIso).getTime())
+
+        if (sanitized.length === 0) {
+          setError("No valid feedings to save")
+          return
+        }
+
+        console.log("➕ AJOUT TÉTÉES EN LOT:", sanitized)
+
+        let lastSide: "left" | "right" | null = null
+        for (const entry of sanitized) {
+          await addLogEntry({ side: entry.side, timestamp: entry.timestampIso, userId: userIdToUse })
+          if (entry.side === "left" || entry.side === "right") {
+            lastSide = entry.side
+          }
+        }
+
+        if (lastSide) {
+          setLastFeedingSide(lastSide)
+        }
+
+        const latestTimestamp = sanitized[sanitized.length - 1]?.timestampIso
+        const successMessage = sanitized.length === 1 ? "Feeding saved!" : `${sanitized.length} feedings saved!`
+        setSuccess(successMessage)
+
+        await loadAllDataWithRecordCheck(latestTimestamp, userIdToUse)
+        console.log("✅ AJOUT TÉTÉES EN LOT TERMINÉ")
+      } catch (error: unknown) {
+        console.error("Error adding batch logs:", error)
+        const errorMessage = error instanceof Error ? error.message : "Error saving feedings"
+        setError(errorMessage)
+      } finally {
+        setSubmitting(false)
+      }
+    },
+    [],
+  )
+
   const startEditing = useCallback((log: FoodLog) => {
     setEditingId(log.id)
     const d = new Date(log.timestamp)
@@ -1342,6 +1422,7 @@ export function useFoodTracker() {
 
     // Helpers
     addLog,
+    addBatchLogs,
     startEditing,
     cancelEditing,
     saveEdit,

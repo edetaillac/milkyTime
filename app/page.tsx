@@ -81,6 +81,7 @@ function FoodTrackerView() {
     setEditingDate,
     setEditingTime,
     addLog,
+    addBatchLogs,
     startEditing,
     cancelEditing,
     saveEdit,
@@ -226,6 +227,7 @@ function FoodTrackerView() {
         submitting={submitting}
         suggestedSide={suggestedSide}
         onAddFeeding={addLog}
+        onAddFeedingsBatch={addBatchLogs}
       />
 
       {/* Cartes Aujourd'hui + Smart */}
