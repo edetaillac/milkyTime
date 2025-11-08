@@ -216,7 +216,7 @@ export async function fetchIntervalChartData(userId: string, period: IntervalPer
 export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: string): Promise<WeeklyMedianData[]> {
   try {
     const twelveWeeksAgo = new Date()
-    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84)
+    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 168)
     const endDate = new Date()
 
     const logs = await fetchLogsWithOptions(
