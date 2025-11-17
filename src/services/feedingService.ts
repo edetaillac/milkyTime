@@ -215,16 +215,17 @@ export async function fetchIntervalChartData(userId: string, period: IntervalPer
 
 export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: string): Promise<WeeklyMedianData[]> {
   try {
-    const twelveWeeksAgo = new Date()
-    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 168)
+    const twentyFourWeeksAgo = new Date()
+    twentyFourWeeksAgo.setDate(twentyFourWeeksAgo.getDate() - 168)
     const endDate = new Date()
+    endDate.setHours(23, 59, 59, 999) // Include the entire current day
 
     const logs = await fetchLogsWithOptions(
       {
-        startDate: twelveWeeksAgo,
+        startDate: twentyFourWeeksAgo,
         endDate,
         orderBy: "timestamp",
-        ascending: true,
+        ascending: false, // Get most recent logs first to avoid 1000-row limit
       },
       userId,
     )
@@ -291,6 +292,7 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
       {
         day: number[]
         night: number[]
+        feedingCount: number
         meta: {
           weekStartDate: Date
           weekEndDate: Date
@@ -301,6 +303,7 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
       }
     > = {}
 
+    // First pass: create buckets for all weeks that have feedings
     for (let index = 0; index < sorted.length; index += 1) {
       const currentFeeding = sorted[index]
       const currentDate = new Date(currentFeeding.timestamp)
@@ -309,18 +312,12 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
         continue
       }
 
-      let interval = 0
-      if (index < sorted.length - 1) {
-        const previousFeeding = sorted[index + 1]
-        const previousDate = new Date(previousFeeding.timestamp)
-        interval = Math.round((currentDate.getTime() - previousDate.getTime()) / (1000 * 60))
-      }
-
-      const bucket =
-        weeklyData[weekInfo.key] ??
-        (weeklyData[weekInfo.key] = {
+      // Ensure bucket exists for this week
+      if (!weeklyData[weekInfo.key]) {
+        weeklyData[weekInfo.key] = {
           day: [],
           night: [],
+          feedingCount: 0,
           meta: {
             weekStartDate: weekInfo.weekStartDate,
             weekEndDate: weekInfo.weekEndDate,
@@ -328,17 +325,29 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
             sortKey: weekInfo.sortKey,
             ageWeekIndex: weekInfo.ageWeekIndex,
           },
-        })
-
-      bucket.meta.weekStartDate = weekInfo.weekStartDate
-      bucket.meta.weekEndDate = weekInfo.weekEndDate
-      bucket.meta.weekNumber = weekInfo.weekNumber
-      bucket.meta.sortKey = weekInfo.sortKey
-      if (weekInfo.ageWeekIndex !== undefined) {
-        bucket.meta.ageWeekIndex = weekInfo.ageWeekIndex
+        }
       }
 
-      if (interval > 0) {
+      // Count the feeding
+      weeklyData[weekInfo.key].feedingCount += 1
+    }
+
+    // Second pass: calculate intervals between consecutive feedings
+    for (let index = 0; index < sorted.length - 1; index += 1) {
+      const currentFeeding = sorted[index]
+      const previousFeeding = sorted[index + 1]
+      const currentDate = new Date(currentFeeding.timestamp)
+      const previousDate = new Date(previousFeeding.timestamp)
+      const weekInfo = buildWeekInfo(currentDate)
+
+      if (!weekInfo) {
+        continue
+      }
+
+      const interval = Math.round((currentDate.getTime() - previousDate.getTime()) / (1000 * 60))
+      const bucket = weeklyData[weekInfo.key]
+
+      if (bucket && interval > 0) {
         if (isNightHour(currentDate)) {
           bucket.night.push(interval)
         } else {
@@ -348,7 +357,7 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
     }
 
     const weeklyStats: WeeklyMedianData[] = Object.values(weeklyData)
-      .filter((data) => data.day.length >= 1 || data.night.length >= 1)
+      .filter((data) => data.feedingCount >= 1)
       .map((data) => {
         const dayIntervals = data.day.sort((a, b) => a - b)
         const nightIntervals = data.night.sort((a, b) => a - b)

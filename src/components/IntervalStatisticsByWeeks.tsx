@@ -132,8 +132,8 @@ export function IntervalStatisticsByWeeks({ data, getTooltipContentStyle, format
         <div className="flex items-center justify-center h-full text-muted-foreground">
           <div className="text-center">
             <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Not enough data over 12 weeks</p>
-            <p className="text-xs mt-1">Minimum 3 intervals per week</p>
+            <p>Not enough data over 24 weeks</p>
+            <p className="text-xs mt-1">Minimum 2 feedings per week required</p>
           </div>
         </div>
       )}

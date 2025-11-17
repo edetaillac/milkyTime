@@ -12,12 +12,14 @@ type FetchOptions = {
 export async function fetchLogsWithOptions(options: FetchOptions = {}, userId: string) {
   const supabase = getSupabaseClient()
   const { orderBy = "timestamp", ascending = false, limit, startDate, endDate } = options
+
   let query = supabase.from("food_logs").select("*").eq("user_id", userId)
   if (startDate) query = query.gte("timestamp", startDate.toISOString())
-  if (endDate) query = query.lt("timestamp", endDate.toISOString())
+  if (endDate) query = query.lte("timestamp", endDate.toISOString())
   query = query.order(orderBy, { ascending })
   if (limit) query = query.limit(limit)
   const { data, error } = await query
+
   if (error) throw error
   return (data || []) as FoodLog[]
 }
