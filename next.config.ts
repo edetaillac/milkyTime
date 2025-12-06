@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     // Disable lint during `next build` to avoid blocking compilation
     ignoreDuringBuilds: true,
   },
+  output: 'standalone',
 };
 
 export default nextConfig;
