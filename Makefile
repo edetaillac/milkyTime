@@ -70,7 +70,7 @@ docker-logs: ## 📋 Show Docker logs
 # Deploy
 .PHONY: deploy
 deploy: ## 🚀 Deploy to production server
-	ssh $(SERVER_USER)@$(SERVER_HOST) "cd $(APP_PATH) && git fetch origin && git reset --hard origin/main && docker-compose -f docker-compose.prod.yml up --build -d"
+	ssh $(SERVER_USER)@$(SERVER_HOST) "cd $(APP_PATH) && git fetch origin && git reset --hard origin/main && docker-compose -f docker-compose.prod.yml build --no-cache && docker-compose -f docker-compose.prod.yml up -d"
 
 # Cleanup
 .PHONY: clean
