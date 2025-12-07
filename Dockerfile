@@ -35,9 +35,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# 🛡️ SECURITY: Remove shell to prevent malware execution
-RUN rm -f /bin/sh /bin/bash /usr/bin/wget /usr/bin/curl /bin/busybox 2>/dev/null || true
-
 COPY --from=builder /app/public ./public
 
 # Set the correct permission for prerender cache
