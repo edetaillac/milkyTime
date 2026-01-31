@@ -348,7 +348,10 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
       const bucket = weeklyData[weekInfo.key]
 
       if (bucket && interval > 0) {
-        if (isNightHour(currentDate)) {
+        // Un écart est "nuit" si le biberon précédent OU le biberon actuel est de nuit
+        const isNightInterval = isNightHour(previousDate) || isNightHour(currentDate)
+
+        if (isNightInterval) {
           bucket.night.push(interval)
         } else {
           bucket.day.push(interval)
@@ -498,15 +501,20 @@ export async function calculateLast7DaysMedianData(userId: string): Promise<Last
       const currentTime = new Date(current.timestamp)
       const nextTime = new Date(next.timestamp)
       const interval = (currentTime.getTime() - nextTime.getTime()) / (1000 * 60)
-      const hour = currentTime.getHours()
-      const isDay = hour >= DAY_START_HOUR && hour < NIGHT_START_HOUR
+      const currentHour = currentTime.getHours()
+      const previousHour = nextTime.getHours()
+
+      // Un écart est "nuit" si le biberon précédent OU le biberon actuel est de nuit
+      const isCurrentNight = currentHour >= NIGHT_START_HOUR || currentHour < DAY_START_HOUR
+      const isPreviousNight = previousHour >= NIGHT_START_HOUR || previousHour < DAY_START_HOUR
+      const isDay = !isCurrentNight && !isPreviousNight
 
       const year = currentTime.getFullYear()
       const month = currentTime.getMonth()
       const day = currentTime.getDate()
       const dateForStats = new Date(year, month, day)
 
-      if (hour >= NIGHT_START_HOUR) {
+      if (currentHour >= NIGHT_START_HOUR) {
         dateForStats.setDate(dateForStats.getDate() + 1)
       }
 
