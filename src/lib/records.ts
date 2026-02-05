@@ -1,4 +1,5 @@
 import { type FoodLogWithInterval, type ProcessedIntervalData } from "./types"
+import { type DayNightSchedule, isNightHourWithSchedule } from "./scheduleConfig"
 
 export function getMinRecordThreshold(babyAgeWeeks: number): number {
   if (babyAgeWeeks < 4) return 30
@@ -8,11 +9,12 @@ export function getMinRecordThreshold(babyAgeWeeks: number): number {
 
 export function getRecordIndicator(
   log: FoodLogWithInterval,
-  records: { day: ProcessedIntervalData[]; night: ProcessedIntervalData[] }
+  records: { day: ProcessedIntervalData[]; night: ProcessedIntervalData[] },
+  schedule: DayNightSchedule
 ): string | null {
   if (!log.intervalMinutes || log.intervalMinutes <= 0) return null
   const d = new Date(log.timestamp)
-  const isNight = d.getHours() >= 22 || d.getHours() < 7
+  const isNight = isNightHourWithSchedule(d, schedule)
   const relevant = isNight ? records.night : records.day
   if (relevant.length === 0) return null
   const recordIndex = relevant.findIndex(

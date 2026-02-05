@@ -1,13 +1,23 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Trophy } from "lucide-react"
+import type { DayNightSchedule } from "../lib/scheduleConfig"
 
 interface MonthlyRecordsProps {
   isDarkMode: boolean
   records: { day: Array<{ date: string; time: string; interval: number }>; night: Array<{ date: string; time: string; interval: number }> }
   formatTimeInterval: (minutes: number) => string
+  currentSchedule: DayNightSchedule
 }
 
-export function MonthlyRecords({ isDarkMode, records, formatTimeInterval }: MonthlyRecordsProps) {
+export function MonthlyRecords({ isDarkMode, records, formatTimeInterval, currentSchedule }: MonthlyRecordsProps) {
+  // Format schedule time for display
+  const formatScheduleTime = (hour: number, minute: number) => {
+    return `${hour}h${minute > 0 ? minute.toString().padStart(2, '0') : ''}`
+  }
+
+  const dayPeriod = `${formatScheduleTime(currentSchedule.dayStartHour, currentSchedule.dayStartMinute)}-${formatScheduleTime(currentSchedule.nightStartHour, currentSchedule.nightStartMinute)}`
+  const nightPeriod = `${formatScheduleTime(currentSchedule.nightStartHour, currentSchedule.nightStartMinute)}-${formatScheduleTime(currentSchedule.dayStartHour, currentSchedule.dayStartMinute)}`
+
   return (
     <Card className={`gap-2 ${isDarkMode ? "bg-[#2a2a2a] border-gray-700" : "bg-white border-gray-200"}`}>
       <CardHeader className="pb-2">
@@ -22,6 +32,7 @@ export function MonthlyRecords({ isDarkMode, records, formatTimeInterval }: Mont
             <div className="flex items-center gap-2 mb-3">
               <span className="text-sm">☀️</span>
               <span className="text-sm font-medium text-amber-600">Day</span>
+              <span className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>({dayPeriod})</span>
             </div>
             <div className="space-y-2">
               {records.day.length > 0 ? (
@@ -60,6 +71,7 @@ export function MonthlyRecords({ isDarkMode, records, formatTimeInterval }: Mont
             <div className="flex items-center gap-2 mb-3">
               <span className="text-sm">🌙</span>
               <span className="text-sm font-medium text-blue-600">Night</span>
+              <span className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>({nightPeriod})</span>
             </div>
             <div className="space-y-2">
               {records.night.length > 0 ? (

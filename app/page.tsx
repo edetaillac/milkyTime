@@ -56,6 +56,7 @@ function FoodTrackerView() {
     currentUser,
     calculateBabyAgeWeeks,
     formatBabyAge,
+    currentSchedule,
     isDarkMode,
     setIsDarkMode,
     showPredictionInfo,
@@ -361,12 +362,14 @@ function FoodTrackerView() {
         isDarkMode={isDarkMode}
         records={records}
         formatTimeInterval={formatTimeInterval}
+        currentSchedule={currentSchedule}
       />
 
       {/* Table récentes */}
       <RecentFeedingsTable
         isDarkMode={isDarkMode}
         logsWithIntervals={logsWithIntervals}
+        currentSchedule={currentSchedule}
         editingId={editingId}
         editingDate={editingDate}
         editingTime={editingTime}

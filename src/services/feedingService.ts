@@ -11,6 +11,7 @@ import {
   type WeeklyMedianData,
   isNightHour,
 } from "../lib"
+import { type DayNightSchedule, isNightHourWithSchedule, getScheduleForAge } from "../lib/scheduleConfig"
 
 type FetchOptions = {
   orderBy?: string
@@ -22,8 +23,7 @@ type FetchOptions = {
 
 type IntervalPeriod = "24h" | "48h" | "72h" | "7d"
 
-const DAY_START_HOUR = 7
-const NIGHT_START_HOUR = 22
+// Constants removed - now using schedule parameter from scheduleConfig
 
 const pad2 = (value: number) => value.toString().padStart(2, "0")
 
@@ -68,7 +68,7 @@ const buildDailySeries = (logs: FoodLog[], start: Date, end: Date): DailyStatsDa
   return result
 }
 
-const processIntervalData = (logs: FoodLog[], period: IntervalPeriod): ProcessedIntervalData[] => {
+const processIntervalData = (logs: FoodLog[], period: IntervalPeriod, schedule: DayNightSchedule): ProcessedIntervalData[] => {
   const sorted = logs
     .slice()
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
@@ -102,7 +102,7 @@ const processIntervalData = (logs: FoodLog[], period: IntervalPeriod): Processed
       time: timeLabel,
       interval: intervalMinutes,
       hour: currentDate.getHours(),
-      isNight: isNightHour(currentDate),
+      isNight: isNightHourWithSchedule(currentDate, schedule),
       timestamp: current.timestamp,
       dateChanged,
       fullDate: currentDate,
@@ -207,10 +207,10 @@ export async function fetchDailyStatsRange(userId: string, days: number): Promis
   return buildDailySeries(logs as FoodLog[], start, end)
 }
 
-export async function fetchIntervalChartData(userId: string, period: IntervalPeriod): Promise<ProcessedIntervalData[]> {
+export async function fetchIntervalChartData(userId: string, period: IntervalPeriod, schedule: DayNightSchedule): Promise<ProcessedIntervalData[]> {
   const startDate = getIntervalRangeStart(period)
   const logs = await fetchLogsWithOptions({ startDate, orderBy: "timestamp", ascending: true }, userId)
-  return processIntervalData(logs as FoodLog[], period)
+  return processIntervalData(logs as FoodLog[], period, schedule)
 }
 
 export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: string): Promise<WeeklyMedianData[]> {
@@ -348,8 +348,12 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
       const bucket = weeklyData[weekInfo.key]
 
       if (bucket && interval > 0) {
+        // Get the schedule for this specific week's age
+        const weekAgeWeeks = weekInfo.ageWeekIndex ?? 0
+        const weekSchedule = getScheduleForAge(weekAgeWeeks)
+
         // Un écart est "nuit" si le biberon précédent OU le biberon actuel est de nuit
-        const isNightInterval = isNightHour(previousDate) || isNightHour(currentDate)
+        const isNightInterval = isNightHourWithSchedule(previousDate, weekSchedule) || isNightHourWithSchedule(currentDate, weekSchedule)
 
         if (isNightInterval) {
           bucket.night.push(interval)
@@ -433,7 +437,7 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
   }
 }
 
-export async function calculateLast7DaysMedianData(userId: string): Promise<Last7DaysData[]> {
+export async function calculateLast7DaysMedianData(userId: string, schedule: DayNightSchedule): Promise<Last7DaysData[]> {
   try {
     const fourteenDaysAgo = new Date()
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
@@ -470,15 +474,15 @@ export async function calculateLast7DaysMedianData(userId: string): Promise<Last
     for (let index = 0; index < sorted.length; index += 1) {
       const feeding = sorted[index]
       const feedingTime = new Date(feeding.timestamp)
-      const hour = feedingTime.getHours()
-      const isDay = hour >= DAY_START_HOUR && hour < NIGHT_START_HOUR
+      const isNight = isNightHourWithSchedule(feedingTime, schedule)
 
       const year = feedingTime.getFullYear()
       const month = feedingTime.getMonth()
       const day = feedingTime.getDate()
       const dateForStats = new Date(year, month, day)
 
-      if (hour >= NIGHT_START_HOUR) {
+      // If it's night feeding, it belongs to the next day's stats
+      if (isNight && feedingTime.getHours() >= schedule.nightStartHour) {
         dateForStats.setDate(dateForStats.getDate() + 1)
       }
 
@@ -488,7 +492,7 @@ export async function calculateLast7DaysMedianData(userId: string): Promise<Last
         dailyData[dateKey] = { dayIntervals: [], nightIntervals: [], dayFeedings: 0, nightFeedings: 0 }
       }
 
-      if (isDay) {
+      if (!isNight) {
         dailyData[dateKey].dayFeedings += 1
       } else {
         dailyData[dateKey].nightFeedings += 1
@@ -501,12 +505,10 @@ export async function calculateLast7DaysMedianData(userId: string): Promise<Last
       const currentTime = new Date(current.timestamp)
       const nextTime = new Date(next.timestamp)
       const interval = (currentTime.getTime() - nextTime.getTime()) / (1000 * 60)
-      const currentHour = currentTime.getHours()
-      const previousHour = nextTime.getHours()
 
       // Un écart est "nuit" si le biberon précédent OU le biberon actuel est de nuit
-      const isCurrentNight = currentHour >= NIGHT_START_HOUR || currentHour < DAY_START_HOUR
-      const isPreviousNight = previousHour >= NIGHT_START_HOUR || previousHour < DAY_START_HOUR
+      const isCurrentNight = isNightHourWithSchedule(currentTime, schedule)
+      const isPreviousNight = isNightHourWithSchedule(nextTime, schedule)
       const isDay = !isCurrentNight && !isPreviousNight
 
       const year = currentTime.getFullYear()
@@ -514,7 +516,7 @@ export async function calculateLast7DaysMedianData(userId: string): Promise<Last
       const day = currentTime.getDate()
       const dateForStats = new Date(year, month, day)
 
-      if (currentHour >= NIGHT_START_HOUR) {
+      if (isCurrentNight && currentTime.getHours() >= schedule.nightStartHour) {
         dateForStats.setDate(dateForStats.getDate() + 1)
       }
 

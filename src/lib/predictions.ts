@@ -2,11 +2,13 @@ import { type FoodLogWithInterval } from "./types"
 import { PREDICTION, PROB_WINDOW } from "./constants"
 import { clamp, trimmedMean, mad, median } from "./utils/math"
 import { getCurrentTimeSlot, getAdaptiveParams } from "./utils/business"
+import { type DayNightSchedule, isNightHourWithSchedule } from "./scheduleConfig"
 
 export interface ComputePredictionsInput {
   logs: FoodLogWithInterval[]
   totalLogsCount: number
   calculateBabyAgeWeeks: () => number
+  schedule: DayNightSchedule
   now?: Date
   timeSinceMinutes?: number
 }
@@ -22,7 +24,7 @@ export interface ComputePredictionsOutput {
 }
 
 export function computePredictions(input: ComputePredictionsInput): ComputePredictionsOutput | null {
-  const { logs, totalLogsCount, calculateBabyAgeWeeks, now: nowArg, timeSinceMinutes } = input
+  const { logs, totalLogsCount, calculateBabyAgeWeeks, schedule, now: nowArg, timeSinceMinutes } = input
   if (!logs || logs.length === 0) return null
 
   const last = logs[0]
@@ -64,7 +66,7 @@ export function computePredictions(input: ComputePredictionsInput): ComputePredi
     const hour = current.getHours()
     const slot = getCurrentTimeSlot(hour)
     intervalsBySlot[slot].push(interval)
-    const isNightFeeding = hour >= 22 || hour < 7
+    const isNightFeeding = isNightHourWithSchedule(current, schedule)
     if (isNightFeeding) nightIntervals.push(interval)
     else dayIntervals.push(interval)
   }
@@ -81,7 +83,7 @@ export function computePredictions(input: ComputePredictionsInput): ComputePredi
 
   const curHour = now.getHours()
   const curSlot = getCurrentTimeSlot(curHour)
-  const isNightNow = curHour >= 22 || curHour < 7
+  const isNightNow = isNightHourWithSchedule(now, schedule)
 
   const adaptiveParams = getAdaptiveParams(totalLogsCount, weeks)
 

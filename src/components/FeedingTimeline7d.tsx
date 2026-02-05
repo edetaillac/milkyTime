@@ -19,12 +19,12 @@ import {
   formatYAxisInterval,
   getXAxisTicks,
   getYAxisTicks,
-  isNightHour,
   type ProcessedIntervalData,
 } from "../lib"
+import { isNightHourWithSchedule } from "../lib/scheduleConfig"
 
 export function FeedingTimeline7d() {
-  const { intervalChartData7d, getTooltipContentStyle } = useFoodTrackerContext()
+  const { intervalChartData7d, getTooltipContentStyle, currentSchedule } = useFoodTrackerContext()
   const data = intervalChartData7d
 
   const tooltipFormatter: TooltipProps<number, string>["formatter"] = (value, name) => {
@@ -72,8 +72,9 @@ export function FeedingTimeline7d() {
                 const x1 = Math.max(time, rawStart)
                 const x2 = Math.min(time + 60 * 60 * 1000, rawEnd)
                 if (x2 <= x1) continue
-                const currentDate = new Date(time)
-                const isNight = isNightHour(currentDate)
+                // Test at the middle of the hour zone to handle schedules with minutes (e.g., 19h30)
+                const middleOfZone = new Date(time + 30 * 60 * 1000)
+                const isNight = isNightHourWithSchedule(middleOfZone, currentSchedule)
                 zones.push(
                   <ReferenceArea
                     key={`zone-${time}`}

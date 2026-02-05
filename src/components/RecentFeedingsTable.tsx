@@ -6,10 +6,12 @@ import { Calendar, Check, Edit3, Trash2, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
 import { type FoodLogWithInterval } from "../lib/types"
+import { isNightHourWithSchedule, type DayNightSchedule } from "../lib/scheduleConfig"
 
 interface RecentFeedingsTableProps {
   isDarkMode: boolean
   logsWithIntervals: FoodLogWithInterval[]
+  currentSchedule: DayNightSchedule
   editingId: string | null
   editingDate: string
   editingTime: string
@@ -30,6 +32,7 @@ export function RecentFeedingsTable(props: RecentFeedingsTableProps) {
   const {
     isDarkMode,
     logsWithIntervals,
+    currentSchedule,
     editingId,
     editingDate,
     editingTime,
@@ -64,8 +67,7 @@ export function RecentFeedingsTable(props: RecentFeedingsTableProps) {
           <TableBody>
             {logsWithIntervals.map((log) => {
               const feedingTime = new Date(log.timestamp)
-              const hour = feedingTime.getHours()
-              const isNightFeeding = hour >= 22 || hour < 7
+              const isNightFeeding = isNightHourWithSchedule(feedingTime, currentSchedule)
               const dayNightBg = isNightFeeding
                 ? (isDarkMode ? "bg-blue-950/20" : "bg-blue-50/50")
                 : (isDarkMode ? "bg-amber-950/20" : "bg-amber-50/50")

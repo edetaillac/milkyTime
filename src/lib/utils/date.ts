@@ -36,9 +36,14 @@ export function formatBabyAgeFromBirthDate(babyBirthDate: string | null | undefi
   return parts.join(" ")
 }
 
+/**
+ * @deprecated Use isNightHourWithSchedule with explicit schedule instead
+ * Kept for backward compatibility - uses hardcoded 22-7 schedule
+ */
 export function isNightHour(date: Date): boolean {
   const hour = date.getHours()
   return hour >= 22 || hour < 7
 }
 
-
+// Re-export from scheduleConfig for easy access
+export { isNightHourWithSchedule, getScheduleForAge, type DayNightSchedule } from '../scheduleConfig'

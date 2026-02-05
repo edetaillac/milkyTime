@@ -27,6 +27,7 @@ import {
   formatBabyAgeFromBirthDate,
   isNightHour,
 } from "../lib"
+import { getScheduleForAge, isNightHourWithSchedule, type DayNightSchedule } from "../lib/scheduleConfig"
 import { addLogEntry, updateLogTimestamp, deleteLogEntry } from "../lib/supabase"
 import {
   fetchLogsWithOptions as fetchLogsWithOptionsService,
@@ -121,8 +122,24 @@ export function useFoodTracker() {
   // Format baby age with detailed weeks/months display (compatible with existing UI)
   const formatBabyAge = () => formatBabyAgeFromBirthDate(babyBirthDate)
 
+  // Computed schedule based on current baby age
+  const currentSchedule = useMemo<DayNightSchedule>(() => {
+    const ageWeeks = calculateBabyAgeWeeksFromBirthDate(babyBirthDate)
+    return getScheduleForAge(ageWeeks)
+  }, [babyBirthDate])
+
+  // Reload interval data when schedule changes (e.g., when babyBirthDate is loaded)
+  useEffect(() => {
+    if (currentUserId && babyBirthDate) {
+      fetchIntervalChartData24h(currentUserId)
+      fetchIntervalChartData72h(currentUserId)
+      fetchIntervalChartData7d(currentUserId)
+      calculateLast7DaysMedianData(currentUserId)
+    }
+  }, [currentSchedule, currentUserId])
+
   // Détection automatique jour/nuit avec paramètre d'URL
-  const isNightTime = () => isNightHour(new Date())
+  const isNightTime = () => isNightHourWithSchedule(new Date(), currentSchedule)
   
   // Vérifier le paramètre d'URL pour forcer le thème
   const getInitialTheme = () => {
@@ -454,7 +471,7 @@ export function useFoodTracker() {
       return
     }
     try {
-      const data = await fetchIntervalChartDataService(userIdToUse, "24h")
+      const data = await fetchIntervalChartDataService(userIdToUse, "24h", currentSchedule)
       setIntervalChartData24h(data)
     } catch (e) {
       console.error("Error fetching 24h interval data:", e)
@@ -468,7 +485,7 @@ export function useFoodTracker() {
       return
     }
     try {
-      const data = await fetchIntervalChartDataService(userIdToUse, "72h")
+      const data = await fetchIntervalChartDataService(userIdToUse, "72h", currentSchedule)
       setIntervalChartData72h(data)
     } catch (e) {
       console.error("Error fetching 72h interval data:", e)
@@ -482,7 +499,7 @@ export function useFoodTracker() {
       return
     }
     try {
-      const data = await fetchIntervalChartDataService(userIdToUse, "7d")
+      const data = await fetchIntervalChartDataService(userIdToUse, "7d", currentSchedule)
       setIntervalChartData7d(data)
     } catch (e) {
       console.error("Error fetching 7d interval data:", e)
@@ -513,7 +530,7 @@ export function useFoodTracker() {
       return
     }
     try {
-      const data = await calculateLast7DaysMedianDataService(userIdToUse)
+      const data = await calculateLast7DaysMedianDataService(userIdToUse, currentSchedule)
       setLast7DaysData(data)
     } catch (e) {
       console.error("Error calculating last 7 days data:", e)
@@ -816,9 +833,10 @@ export function useFoodTracker() {
       logs,
       totalLogsCount,
       calculateBabyAgeWeeks,
+      schedule: currentSchedule,
       timeSinceMinutes: timeSinceLastCalculated ?? undefined,
     })
-  }, [logs, totalLogsCount, timeSinceLastCalculated])
+  }, [logs, totalLogsCount, timeSinceLastCalculated, currentSchedule])
 
   // Couleur du point mémorisée pour éviter les re-rendus inutiles
   const predictionPointColor = useMemo(() => {
@@ -1329,8 +1347,8 @@ export function useFoodTracker() {
 
   // Mémoisation des indicateurs de records
   const getRecordIndicator = useCallback(
-    (log: FoodLogWithInterval) => getRecordIndicatorLib(log, records),
-    [records],
+    (log: FoodLogWithInterval) => getRecordIndicatorLib(log, records, currentSchedule),
+    [records, currentSchedule],
   )
 
   const wasInWindow =
@@ -1366,6 +1384,7 @@ export function useFoodTracker() {
     currentUser,
     calculateBabyAgeWeeks,
     formatBabyAge,
+    currentSchedule,
 
     // Theme & UI state
     isDarkMode,
