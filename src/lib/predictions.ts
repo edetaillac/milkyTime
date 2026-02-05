@@ -72,14 +72,19 @@ export function computePredictions(input: ComputePredictionsInput): ComputePredi
   }
 
   const weeks = calculateBabyAgeWeeks()
+  // Age-based defaults aligned with schedule presets
+  // 0-12 weeks (0-3 months): schedule 21h-7h
+  // 13-24 weeks (3-6 months): schedule 20h-7h
+  // 25-52 weeks (6-12 months): schedule 19h30-7h
+  // 53+ weeks (12+ months): schedule 19h-7h
   const ageDefaults =
-    weeks <= 4
-      ? { day: 90, night: 180 }
-      : weeks <= 12
-      ? { day: 120, night: 240 }
+    weeks <= 12
+      ? { day: 120, night: 240 }  // 0-3 months
       : weeks <= 24
-      ? { day: 150, night: 300 }
-      : { day: 180, night: 360 }
+      ? { day: 150, night: 300 }  // 3-6 months
+      : weeks <= 52
+      ? { day: 180, night: 360 }  // 6-12 months
+      : { day: 180, night: 360 }  // 12+ months
 
   const curHour = now.getHours()
   const curSlot = getCurrentTimeSlot(curHour)
@@ -104,7 +109,7 @@ export function computePredictions(input: ComputePredictionsInput): ComputePredi
   let reliabilityIndex = 0
 
   if (intervalsAll.length < 10) {
-    expectedInterval = isNightNow ? 150 : 100
+    expectedInterval = isNightNow ? ageDefaults.night : ageDefaults.day
     reliabilityIndex = 10
   } else if (chosenIntervals.length > 0) {
     expectedInterval = trimmedMean(chosenIntervals, PREDICTION.OUTLIER_TRIM_RATIO)
