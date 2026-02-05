@@ -69,7 +69,11 @@ docker-logs: ## 📋 Show Docker logs
 
 # Deploy
 .PHONY: deploy
-deploy: ## 🚀 Deploy to production server
+deploy: ## 🚀 Deploy to production server (fast, uses cache)
+	ssh $(SERVER_USER)@$(SERVER_HOST) "cd $(APP_PATH) && git fetch origin && git reset --hard origin/main && docker-compose -f docker-compose.prod.yml build && docker-compose -f docker-compose.prod.yml up -d"
+
+.PHONY: deploy-clean
+deploy-clean: ## 🧹 Deploy with full rebuild (slow, no cache)
 	ssh $(SERVER_USER)@$(SERVER_HOST) "cd $(APP_PATH) && git fetch origin && git reset --hard origin/main && docker-compose -f docker-compose.prod.yml build --no-cache && docker-compose -f docker-compose.prod.yml up -d"
 
 # Cleanup
