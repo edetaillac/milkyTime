@@ -115,7 +115,7 @@ export function calculateDayPercentageExact(
   const startDay = new Date(startDate)
   startDay.setHours(0, 0, 0, 0)
 
-  let currentDay = new Date(startDay)
+  const currentDay = new Date(startDay)
 
   while (currentDay.getTime() <= endMs) {
     // Calculate day start and end for this specific day

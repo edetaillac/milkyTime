@@ -9,7 +9,6 @@ import {
   type Last7DaysData,
   type ProcessedIntervalData,
   type WeeklyMedianData,
-  isNightHour,
 } from "../lib"
 import { type DayNightSchedule, isNightHourWithSchedule, getScheduleForAge, isNightIntervalByMajority } from "../lib/scheduleConfig"
 

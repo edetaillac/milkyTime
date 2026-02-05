@@ -31,7 +31,7 @@ export const getYAxisTicks = (dataMax: number) => {
 /**
  * Calcule le domaine Y du graphique Evolution avec marge intelligente
  */
-export const getEvolutionYDomain = ([dataMin, dataMax]: [number, number]): [number, number] => {
+export const getEvolutionYDomain = ([_dataMin, dataMax]: [number, number]): [number, number] => {
   // Calculer l'échelle probable basée sur la valeur max
   let step = 1
   if (dataMax <= 10) step = 1

@@ -7,8 +7,11 @@ export function getSupabaseClient(): SupabaseClient {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Variables d'environnement Supabase manquantes")
+  if (!supabaseUrl) {
+    throw new Error("Variable d'environnement manquante : NEXT_PUBLIC_SUPABASE_URL")
+  }
+  if (!supabaseAnonKey) {
+    throw new Error("Variable d'environnement manquante : NEXT_PUBLIC_SUPABASE_ANON_KEY")
   }
 
   supabaseClient = createClient(supabaseUrl, supabaseAnonKey)

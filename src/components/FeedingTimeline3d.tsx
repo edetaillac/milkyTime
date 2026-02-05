@@ -122,7 +122,7 @@ export function FeedingTimeline3d() {
               dataKey="interval"
               stroke="#8b5cf6"
               strokeWidth={2}
-              dot={renderDot as any}
+              dot={(props) => renderDot(props as unknown as DotProps)}
               activeDot={{ r: 6, stroke: "white", strokeWidth: 2 }}
             />
             <Line type="monotone" dataKey="trendLine" stroke="#94a3b8" strokeWidth={2} strokeDasharray="8 4" dot={false} activeDot={false} name="Trend" opacity={0.6} />

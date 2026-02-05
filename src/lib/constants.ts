@@ -33,6 +33,22 @@ export const PREDICTION = {
   CLAMP_MAX: 180,
 } as const
 
+// ===========================
+// Timings & durées
+// ===========================
+
+export const TIMINGS = {
+  CONFETTI_DURATION_MS: 3000,
+  CONFETTI_PARTICLE_INTERVAL_MS: 250,
+  CONFETTI_SCRIPT_RELOAD_DELAY_MS: 100,
+  BEDTIME_LOOKBACK_MS: 35 * 24 * 60 * 60 * 1000,
+  RECORDS_LOOKBACK_MS: 30 * 24 * 60 * 60 * 1000,
+  DATA_SYNC_DELAY_MS: 100,
+  RECORD_CHECK_DELAY_MS: 500,
+  DATA_POLLING_INTERVAL_MS: 300_000,
+  SCROLL_RETRY_DELAYS_MS: [100, 500, 1000] as const,
+} as const
+
 // Largeur de la "fenêtre probable" autour de l'intervalle attendu
 export const PROB_WINDOW = {
   MIN: 30,

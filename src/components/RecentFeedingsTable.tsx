@@ -21,7 +21,7 @@ interface RecentFeedingsTableProps {
   deleteLog: (id: string) => void
   formatTimestamp: (iso: string) => string
   sideLabels: { left: string; right: string; bottle: string }
-  sideBadgeVariant: (side: string) => any
+  sideBadgeVariant: (side: string) => "default" | "secondary" | "destructive" | "outline"
   formatTimeInterval: (minutes: number) => string
   getRecordIndicator: (log: FoodLogWithInterval) => string | null
   onChangeEditingDate: (value: string) => void
@@ -95,10 +95,10 @@ export function RecentFeedingsTable(props: RecentFeedingsTableProps) {
                           />
                         </div>
                         <div className="flex items-center gap-1 mt-2 sm:mt-0">
-                          <Button onClick={() => saveEdit(log.id)} variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-green-50 hover:text-green-600" title="Save">
+                          <Button onClick={() => saveEdit(log.id)} variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-green-50 hover:text-green-600" title="Save" aria-label="Save feeding edit">
                             <Check className="h-4 w-4" />
                           </Button>
-                          <Button onClick={cancelEditing} variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600" title="Cancel">
+                          <Button onClick={cancelEditing} variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600" title="Cancel" aria-label="Cancel editing">
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
@@ -106,7 +106,7 @@ export function RecentFeedingsTable(props: RecentFeedingsTableProps) {
                     ) : (
                       <div className="flex items-center gap-2">
                         <span>{formatTimestamp(log.timestamp)}</span>
-                        <Button onClick={() => startEditing(log)} variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-100 transition-opacity hover:bg-blue-50 hover:text-blue-600" title="Edit date and time">
+                        <Button onClick={() => startEditing(log)} variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-100 transition-opacity hover:bg-blue-50 hover:text-blue-600" title="Edit date and time" aria-label="Edit date and time">
                           <Edit3 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -142,7 +142,7 @@ export function RecentFeedingsTable(props: RecentFeedingsTableProps) {
                   </TableCell>
                   <TableCell>
                     {editingId !== log.id && (
-                      <Button onClick={() => deleteLog(log.id)} variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600" title="Delete this feeding">
+                      <Button onClick={() => deleteLog(log.id)} variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600" title="Delete this feeding" aria-label="Delete this feeding">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}

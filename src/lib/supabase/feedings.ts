@@ -1,5 +1,5 @@
 import { getSupabaseClient } from "./client"
-import { type FoodLog, type FoodLogWithInterval } from "../types"
+import { type FoodLog } from "../types"
 
 type FetchOptions = {
   orderBy?: string

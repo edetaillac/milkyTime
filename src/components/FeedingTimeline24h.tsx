@@ -126,7 +126,7 @@ export function FeedingTimeline24h() {
               dataKey="interval"
               stroke="#8b5cf6"
               strokeWidth={2}
-              dot={renderDot as any}
+              dot={(props) => renderDot(props as unknown as DotProps)}
               activeDot={{ r: 9, stroke: "white", strokeWidth: 2 }}
             />
             <Line type="monotone" dataKey="trendLine" stroke="#94a3b8" strokeWidth={2} strokeDasharray="8 4" dot={false} activeDot={false} name="Trend" opacity={0.6} />
