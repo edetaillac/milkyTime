@@ -42,9 +42,9 @@ export function IntervalStatisticsByDays({ data, getTooltipContentStyle, formatT
     const date = new Date(point.date)
     return (
       <div>
-        <div>{`${date.toLocaleDateString("en-US")} (${totalCount} feedings)`}</div>
+        <div>{`${date.toLocaleDateString("en-US")} (${totalCount} intervals)`}</div>
         <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px" }}>
-          ☀️ Day: {point.dayCount} feedings • 🌙 Night: {point.nightCount} feedings
+          ☀️ Day: {point.dayCount} intervals • 🌙 Night: {point.nightCount} intervals
         </div>
       </div>
     )

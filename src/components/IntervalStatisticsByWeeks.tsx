@@ -45,9 +45,9 @@ export function IntervalStatisticsByWeeks({ data, getTooltipContentStyle, format
       const weekNumber = point.ageWeekIndex + 1
       return (
         <div>
-          <div>{`Age week ${weekNumber} • ${rangeLabel} (${totalCount} feedings)`}</div>
+          <div>{`Age week ${weekNumber} • ${rangeLabel} (${totalCount} intervals)`}</div>
           <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px" }}>
-            ☀️ Day: {point.dayCount} feedings • 🌙 Night: {point.nightCount} feedings
+            ☀️ Day: {point.dayCount} intervals • 🌙 Night: {point.nightCount} intervals
           </div>
         </div>
       )
@@ -55,9 +55,9 @@ export function IntervalStatisticsByWeeks({ data, getTooltipContentStyle, format
 
     return (
       <div>
-        <div>{`Week from ${point.weekStart} to ${point.weekEnd} (${totalCount} feedings)`}</div>
+        <div>{`Week from ${point.weekStart} to ${point.weekEnd} (${totalCount} intervals)`}</div>
         <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px" }}>
-          ☀️ Day: {point.dayCount} feedings • 🌙 Night: {point.nightCount} feedings
+          ☀️ Day: {point.dayCount} intervals • 🌙 Night: {point.nightCount} intervals
         </div>
       </div>
     )

@@ -11,7 +11,7 @@ import {
   type WeeklyMedianData,
   isNightHour,
 } from "../lib"
-import { type DayNightSchedule, isNightHourWithSchedule, getScheduleForAge } from "../lib/scheduleConfig"
+import { type DayNightSchedule, isNightHourWithSchedule, getScheduleForAge, isNightIntervalByMajority } from "../lib/scheduleConfig"
 
 type FetchOptions = {
   orderBy?: string
@@ -352,8 +352,8 @@ export async function calculateWeeklyMedianData(userId: string, babyBirthDate?: 
         const weekAgeWeeks = weekInfo.ageWeekIndex ?? 0
         const weekSchedule = getScheduleForAge(weekAgeWeeks)
 
-        // Un écart est "nuit" si le biberon précédent OU le biberon actuel est de nuit
-        const isNightInterval = isNightHourWithSchedule(previousDate, weekSchedule) || isNightHourWithSchedule(currentDate, weekSchedule)
+        // Classify interval based on majority time spent in day vs night
+        const isNightInterval = isNightIntervalByMajority(previousDate, currentDate, weekSchedule)
 
         if (isNightInterval) {
           bucket.night.push(interval)
@@ -506,16 +506,16 @@ export async function calculateLast7DaysMedianData(userId: string, schedule: Day
       const nextTime = new Date(next.timestamp)
       const interval = (currentTime.getTime() - nextTime.getTime()) / (1000 * 60)
 
-      // Un écart est "nuit" si le biberon précédent OU le biberon actuel est de nuit
-      const isCurrentNight = isNightHourWithSchedule(currentTime, schedule)
-      const isPreviousNight = isNightHourWithSchedule(nextTime, schedule)
-      const isDay = !isCurrentNight && !isPreviousNight
+      // Classify interval based on majority time spent in day vs night
+      const isNightInterval = isNightIntervalByMajority(nextTime, currentTime, schedule)
+      const isDay = !isNightInterval
 
       const year = currentTime.getFullYear()
       const month = currentTime.getMonth()
       const day = currentTime.getDate()
       const dateForStats = new Date(year, month, day)
 
+      const isCurrentNight = isNightHourWithSchedule(currentTime, schedule)
       if (isCurrentNight && currentTime.getHours() >= schedule.nightStartHour) {
         dateForStats.setDate(dateForStats.getDate() + 1)
       }
