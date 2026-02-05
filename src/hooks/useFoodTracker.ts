@@ -81,6 +81,7 @@ export function useFoodTracker() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [showPredictionInfo, setShowPredictionInfo] = useState(false)
   const [showBedtimeInfo, setShowBedtimeInfo] = useState(false)
+  const [showBabyAgeInfo, setShowBabyAgeInfo] = useState(false)
 
   // ===========================
   // User utility functions (defined early to avoid hoisting issues)
@@ -1426,6 +1427,8 @@ export function useFoodTracker() {
     predictionLegend,
     showBedtimeInfo,
     setShowBedtimeInfo,
+    showBabyAgeInfo,
+    setShowBabyAgeInfo,
 
     // Messages
     error,

@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PredictionInfoDialog } from "../src/components/PredictionInfoDialog"
 import { BedtimeInfoDialog } from "../src/components/BedtimeInfoDialog"
+import { BabyAgeInfoDialog } from "../src/components/BabyAgeInfoDialog"
 import { MonthlyRecords } from "../src/components/MonthlyRecords"
 import { AppHeader } from "../src/components/AppHeader"
 import { FeedingTimeline } from "../src/components/FeedingTimeline"
@@ -94,6 +95,8 @@ function FoodTrackerView() {
     bedtimePrediction,
     showBedtimeInfo,
     setShowBedtimeInfo,
+    showBabyAgeInfo,
+    setShowBabyAgeInfo,
     t,
   } = useFoodTrackerContext()
 
@@ -208,6 +211,7 @@ function FoodTrackerView() {
         onLogout={handleLogout}
         formatBabyAge={formatBabyAge}
         title={t('pageTitle')}
+        onShowBabyAgeInfo={() => setShowBabyAgeInfo(true)}
       />
 
       {/* Alerts */}
@@ -269,11 +273,11 @@ function FoodTrackerView() {
           <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: "#f59e0b" }}></div>
-              <span>Day</span>
+              <span>Day ({currentSchedule.dayStartHour}h{currentSchedule.dayStartMinute > 0 ? currentSchedule.dayStartMinute.toString().padStart(2, '0') : ''}-{currentSchedule.nightStartHour}h{currentSchedule.nightStartMinute > 0 ? currentSchedule.nightStartMinute.toString().padStart(2, '0') : ''})</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: "#3b82f6" }}></div>
-              <span>Night</span>
+              <span>Night ({currentSchedule.nightStartHour}h{currentSchedule.nightStartMinute > 0 ? currentSchedule.nightStartMinute.toString().padStart(2, '0') : ''}-{currentSchedule.dayStartHour}h{currentSchedule.dayStartMinute > 0 ? currentSchedule.dayStartMinute.toString().padStart(2, '0') : ''})</span>
             </div>
           </div>
         </CardHeader>
@@ -292,7 +296,7 @@ function FoodTrackerView() {
                 formatYAxisInterval={formatYAxisInterval}
               />
             </TabsContent>
-            
+
             <TabsContent value="by-week" className="mt-1">
               <IntervalStatisticsByWeeks
                 data={weeklyMedianData}
@@ -397,6 +401,12 @@ function FoodTrackerView() {
         open={showBedtimeInfo}
         onOpenChange={setShowBedtimeInfo}
         bedtimePrediction={bedtimePrediction}
+        calculateBabyAgeWeeks={calculateBabyAgeWeeks}
+      />
+      <BabyAgeInfoDialog
+        open={showBabyAgeInfo}
+        onOpenChange={setShowBabyAgeInfo}
+        currentSchedule={currentSchedule}
         calculateBabyAgeWeeks={calculateBabyAgeWeeks}
       />
             </div>

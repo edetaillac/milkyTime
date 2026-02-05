@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { Sun, Moon, LogOut } from "lucide-react"
+import { Sun, Moon, LogOut, Info } from "lucide-react"
 
 interface AppHeaderProps {
   isDarkMode: boolean
@@ -8,9 +8,10 @@ interface AppHeaderProps {
   onLogout: () => void
   formatBabyAge: () => string
   title: string
+  onShowBabyAgeInfo: () => void
 }
 
-export function AppHeader({ isDarkMode, onToggleDarkMode, currentUser, onLogout, formatBabyAge, title }: AppHeaderProps) {
+export function AppHeader({ isDarkMode, onToggleDarkMode, currentUser, onLogout, formatBabyAge, title, onShowBabyAgeInfo }: AppHeaderProps) {
   return (
     <div className="text-center space-y-2">
       <div className="relative">
@@ -39,7 +40,7 @@ export function AppHeader({ isDarkMode, onToggleDarkMode, currentUser, onLogout,
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-center">
+      <div className="flex items-center justify-center gap-1">
         <div
           className={`
             flex items-center gap-1.5 px-2.5 py-1 rounded-full
@@ -49,6 +50,15 @@ export function AppHeader({ isDarkMode, onToggleDarkMode, currentUser, onLogout,
           <span className="text-sm">👶</span>
           <span className={`text-xs font-medium ${isDarkMode ? "text-blue-400" : "text-blue-600"}`}>{formatBabyAge()}</span>
         </div>
+        <Button
+          onClick={onShowBabyAgeInfo}
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0 rounded-full"
+          title="Age-based schedule info"
+        >
+          <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+        </Button>
       </div>
     </div>
   )
