@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Info, Calendar, MoonStar } from "lucide-react"
+import { Info, Calendar } from "lucide-react"
 import {
   ResponsiveContainer,
   LineChart,
@@ -10,7 +10,7 @@ import {
   CartesianGrid,
   ReferenceArea,
 } from "recharts"
-import React, { useEffect, useState } from "react"
+import React from "react"
 import { useFoodTrackerContext } from "../hooks/useFoodTrackerContext"
 import { roundToStep, formatTimeInterval } from "../lib"
 
@@ -24,7 +24,6 @@ export function TodayAndSmartCards() {
     formatTimeSinceLast: formatTimeSinceLastRaw,
     reliabilityIndex,
     setShowPredictionInfo,
-    setShowBedtimeInfo,
     totalLogsCount,
     expectedIntervalMinutes,
     probWindowMinutes,
@@ -35,7 +34,6 @@ export function TodayAndSmartCards() {
     predictionLegend,
     calculateBabyAgeWeeks,
     approachingRecord,
-    bedtimePrediction,
   } = useFoodTrackerContext()
 
   const formatTimeSinceLast = (mins: number) => formatTimeSinceLastRaw(mins) ?? ""
@@ -46,104 +44,6 @@ export function TodayAndSmartCards() {
     const hours = Math.floor(value / 60)
     const minutes = value % 60
     return `${hours}h${minutes.toString().padStart(2, "0")}`
-  }
-
-  const formatWindowMinutes = (value: number) => {
-    const hours = Math.floor(value / 60)
-    const minutes = value % 60
-    return `${hours.toString().padStart(2, "0")}h${minutes.toString().padStart(2, "0")}`
-  }
-
-  const computeIsEvening = () => {
-    const now = new Date()
-    return now.getHours() * 60 + now.getMinutes() >= 18 * 60
-  }
-
-  const [isEvening, setIsEvening] = useState(() => computeIsEvening())
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    const interval = window.setInterval(() => {
-      setIsEvening(computeIsEvening())
-    }, 60_000)
-    return () => window.clearInterval(interval)
-  }, [])
-
-  const renderBedtimeSummary = () => {
-    if (!bedtimePrediction) {
-      return <div className="text-xs text-muted-foreground">Collecting data…</div>
-    }
-
-    if (bedtimePrediction.status !== "ready") {
-      const remainingLabel = bedtimePrediction.nightsRemaining > 0
-        ? `${bedtimePrediction.nightsRemaining} more night${bedtimePrediction.nightsRemaining > 1 ? "s" : ""}`
-        : "More data required"
-      const message =
-        bedtimePrediction.status === "too-young"
-          ? "Baby is still too young for a reliable bedtime pattern"
-          : bedtimePrediction.status === "learning"
-            ? `Model learning (${remainingLabel})`
-            : "Need additional evenings to analyze"
-
-      return (
-        <Alert className={`border border-dashed ${isDarkMode ? "bg-[#2d2d2d] border-gray-700" : "bg-slate-50 border-slate-200"}`}>
-          <AlertDescription className="text-xs text-muted-foreground">
-            {message}
-          </AlertDescription>
-        </Alert>
-      )
-    }
-
-    const { windowStartMinutes, windowEndMinutes } = bedtimePrediction
-    const now = new Date()
-    const currentMinutes = now.getHours() * 60 + now.getMinutes()
-    const chartStart = Math.max(0, Math.min(windowStartMinutes, currentMinutes) - 60)
-    const chartEnd = Math.min(24 * 60, Math.max(windowEndMinutes, currentMinutes) + 60)
-    const showPoint = currentMinutes >= chartStart && currentMinutes <= chartEnd
-    const windowTextColor = isDarkMode ? "#c7d2fe" : "#4338ca"
-
-    return (
-      <>
-        <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${isDarkMode ? "bg-indigo-900/40" : "bg-indigo-100"}`}>
-            <MoonStar className={`h-6 w-6 ${isDarkMode ? "text-indigo-200" : "text-indigo-600"}`} />
-          </div>
-          <div className="flex-1 text-xl font-semibold" style={{ color: windowTextColor }}>
-            {formatWindowMinutes(windowStartMinutes)} – {formatWindowMinutes(windowEndMinutes)}
-          </div>
-        </div>
-        <div className="h-[80px] mt-3">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={[{ time: chartStart }, { time: chartEnd }]} margin={{ top: 10, right: 15, left: 10, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <ReferenceArea
-                x1={windowStartMinutes}
-                x2={windowEndMinutes}
-                fill={isDarkMode ? "#6366f1" : "#4338ca"}
-                fillOpacity={isDarkMode ? 0.35 : 0.25}
-              />
-              {showPoint && (
-                <Line
-                  type="monotone"
-                  data={[{ time: currentMinutes, value: 0.5 }]}
-                  dataKey="value"
-                  stroke="none"
-                  dot={{ fill: isDarkMode ? "#c7d2fe" : "#4338ca", strokeWidth: 0, r: 6 }}
-                />
-              )}
-              <XAxis
-                type="number"
-                dataKey="time"
-                domain={[chartStart, chartEnd]}
-                tickFormatter={formatWindowMinutes}
-                tick={{ fontSize: 11, fill: isDarkMode ? "#e5e7eb" : "#374151" }}
-              />
-              <YAxis hide />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </>
-    )
   }
 
   return (
@@ -289,51 +189,6 @@ export function TodayAndSmartCards() {
               </div>
             </div>
           )}
-
-        {isEvening && (
-          <div
-            className={`mt-5 pt-4 border-t ${
-              isDarkMode ? "border-gray-700" : "border-gray-200"
-            }`}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Last feed before bedtime</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowBedtimeInfo(true)}
-                    className="h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
-                    title="How is bedtime predicted?"
-                  >
-                    <Info className="h-3 w-3" />
-                  </Button>
-                </div>
-                <div className="mt-1 text-[10px] text-muted-foreground">
-                  {bedtimePrediction?.status === "ready"
-                    ? `Based on last 30 d • ${bedtimePrediction.sampleSize} night${bedtimePrediction.sampleSize > 1 ? "s" : ""}`
-                    : "Based on last 30 d · learning"}
-                </div>
-              </div>
-              {bedtimePrediction?.status === "ready" && bedtimePrediction.reliability !== null && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>Reliability: {bedtimePrediction.reliability}%</span>
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      bedtimePrediction.reliability >= 80
-                        ? "bg-green-500"
-                        : bedtimePrediction.reliability >= 60
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                    }`}
-                  ></div>
-                </div>
-              )}
-            </div>
-            {renderBedtimeSummary()}
-          </div>
-        )}
 
         {calculateBabyAgeWeeks() < 4 && (timeSinceLast ?? 0) > 180 && (
           <Alert className="mt-4 border-red-500">

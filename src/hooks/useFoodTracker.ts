@@ -11,13 +11,11 @@ import {
   type ApproachingRecord,
   type SmartAlerts,
   type ProcessedIntervalData,
-  type BedtimePredictionResult,
   formatDate,
   formatTime,
   formatTimeInterval,
   calculateInterval,
   computePredictions,
-  computeBedtimeWindow,
   getPredictionPointColor,
   getStablePointPosition,
   getPredictionLegend,
@@ -48,7 +46,6 @@ export function useFoodTracker() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [logs, setLogs] = useState<FoodLogWithInterval[]>([])
-  const [bedtimeLogs, setBedtimeLogs] = useState<FoodLog[]>([])
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [todayCount, setTodayCount] = useState(0)
@@ -85,7 +82,6 @@ export function useFoodTracker() {
   
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [showPredictionInfo, setShowPredictionInfo] = useState(false)
-  const [showBedtimeInfo, setShowBedtimeInfo] = useState(false)
   const [showBabyAgeInfo, setShowBabyAgeInfo] = useState(false)
 
   // Helper robuste: récupère un userId en priorité override > état > localStorage
@@ -262,9 +258,6 @@ export function useFoodTracker() {
     
     setDeleteConfirmId(null)
 
-    setBedtimeLogs([])
-    setShowBedtimeInfo(false)
-
     setSmartAlerts({ nextFeedingPrediction: null, sideRecommendation: null })
     setProbWindowMinutes(null)
     setExpectedIntervalMinutes(null)
@@ -325,11 +318,6 @@ export function useFoodTracker() {
   }, [logs])
 
   const babyAgeWeeksValue = calculateBabyAgeWeeks()
-
-  const bedtimePrediction = useMemo<BedtimePredictionResult | null>(() => {
-    if (bedtimeLogs.length === 0) return null
-    return computeBedtimeWindow({ logs: bedtimeLogs, babyAgeWeeks: babyAgeWeeksValue })
-  }, [bedtimeLogs, babyAgeWeeksValue])
 
   // Synchroniser timeSinceLast avec timeSinceLastCalculated pour que l'UI se mette à jour
   useEffect(() => {
@@ -398,26 +386,6 @@ export function useFoodTracker() {
     }
   }
 
-  const fetchBedtimeLogs = async (userId?: string) => {
-    const userIdToUse = getUserIdSafely(userId)
-    if (!userIdToUse) {
-      console.warn("currentUserId is not set, skipping fetchBedtimeLogs")
-      setBedtimeLogs([])
-      return []
-    }
-
-    try {
-      const now = new Date()
-      const start = new Date(now.getTime() - TIMINGS.BEDTIME_LOOKBACK_MS)
-      const data = await fetchLogsWithOptions({ startDate: start, orderBy: "timestamp", ascending: true }, userIdToUse)
-      setBedtimeLogs(data)
-      return data
-    } catch (error) {
-      console.error("Error fetching bedtime logs:", error)
-      setBedtimeLogs([])
-      return []
-    }
-  }
 
   const fetchTodayCount = async (userId?: string) => {
     const userIdToUse = getUserIdSafely(userId)
@@ -947,7 +915,6 @@ export function useFoodTracker() {
       await Promise.all([
         fetchLogs(userIdToUse),
         fetchTodayCount(userIdToUse),
-        fetchBedtimeLogs(userIdToUse),
         // Daily stats multi-range
         fetchDailyStatsRange(7, userIdToUse).then(setDailyStats7d),
         fetchDailyStatsRange(30, userIdToUse).then(setDailyStats30d),
@@ -973,7 +940,6 @@ export function useFoodTracker() {
 
     await Promise.all([
       fetchTodayCount(userId),
-      fetchBedtimeLogs(userId),
       fetchDailyStatsRange(7, userId).then(setDailyStats7d),
       fetchDailyStatsRange(30, userId).then(setDailyStats30d),
       fetchIntervalChartData24h(userId),
@@ -1234,7 +1200,6 @@ export function useFoodTracker() {
 
     // Alerts & derived metrics
     smartAlerts,
-    bedtimePrediction,
     probWindowMinutes,
     expectedIntervalMinutes,
     reliabilityIndex,
@@ -1246,8 +1211,6 @@ export function useFoodTracker() {
     predictionPointColor,
     stablePointPosition,
     predictionLegend,
-    showBedtimeInfo,
-    setShowBedtimeInfo,
     showBabyAgeInfo,
     setShowBabyAgeInfo,
 
