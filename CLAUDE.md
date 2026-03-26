@@ -152,6 +152,10 @@ Two distinct approaches, each used where appropriate:
 
 This distinction is intentional: stats need accurate interval classification, while visual elements should reflect the moment in time.
 
+## Improvements roadmap
+
+See `IMPROVEMENTS.md` for the full prioritized list of improvements (product, tech, data/algo, design, security). **Keep this file up to date**: when completing, adding, or reprioritizing an improvement, update `IMPROVEMENTS.md` accordingly.
+
 ## Known technical debt
 
 - `useFoodTracker` is a ~1400-line monolith. Should be split into focused hooks (`useAuth`, `useFeedingData`, `useRecords`, `usePredictions`).
