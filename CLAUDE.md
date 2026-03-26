@@ -124,12 +124,33 @@ id (uuid PK), user_id (uuid FK), side ('left'|'right'|'bottle'),
 timestamp (timestamptz), created_at (timestamptz)
 ```
 
+## UI sections (single-page dashboard, top to bottom)
+
+1. **Header** — App logo, baby age badge (with info dialog), connected user, logout
+2. **Add a feeding** — Left/Right breast buttons (highlighted = recommended side), Bottle button, "Add batch" for bulk import
+3. **Today card** — Feeding count for the day, time since last feeding, recommended side alternation
+4. **Predictions card** — Next predicted feeding time, reliability %, probability window progress bar (start → end with colored zones)
+5. **Feeding Timeline** — Line chart (Recharts) with tabs: 24h / 3 days / 7 days. Shows intervals over time with day (yellow) / night (blue-gray) background zones. Dots colored by feeding side.
+6. **Interval Statistics** — Dual line chart with tabs: By days / By weeks. Separate day (orange) and night (blue) trend lines showing median intervals.
+7. **Evolution** — Stacked bar chart with tabs: 7 days / 1 month. Shows daily feeding counts by side (left/right/bottle).
+8. **Monthly Records** — Two columns: Day and Night. Top 3 longest intervals with gold/silver/bronze medals. Confetti animation on new record.
+9. **Recent Feedings** — Table with Date, Side, Gap columns. Record indicators (medals) shown inline. Edit timestamp and delete actions per row.
+
 ## Key business logic
 
 - **Predictions:** Uses last 72h of data, groups intervals by time slot, trimmed mean with outlier removal, cluster feeding detection. See `src/lib/predictions.ts`.
 - **Records:** Top 3 intervals per month, separate day/night. Bronze/Silver/Gold tiers. Confetti on new records. See `src/lib/records.ts`.
 - **Age-based schedule:** Day/night boundaries shift with baby age (0-3m, 3-6m, 6-12m, 12m+). See `src/lib/scheduleConfig.ts`.
 - **Bedtime:** Predicted from 35-day lookback. See `src/lib/bedtime.ts`.
+
+## Day/night classification strategy
+
+Two distinct approaches, each used where appropriate:
+
+- **Interval classification (majority-based):** `isNightIntervalByMajority(start, end, schedule)` — classifies based on where >50% of the interval duration falls. Used for **all statistical data**: interval statistics, weekly/daily medians, records, approaching record detection.
+- **Point-in-time classification:** `isNightHourWithSchedule(date, schedule)` — classifies based on a single timestamp. Used for **visualization and UI**: chart background zones, dot/row coloring, feeding counts, theme detection, prediction pool selection.
+
+This distinction is intentional: stats need accurate interval classification, while visual elements should reflect the moment in time.
 
 ## Known technical debt
 
