@@ -1,5 +1,4 @@
 import { type FoodLogWithInterval, type ProcessedIntervalData } from "./types"
-import { type DayNightSchedule, isNightHourWithSchedule } from "./scheduleConfig"
 
 export function getMinRecordThreshold(babyAgeWeeks: number): number {
   if (babyAgeWeeks < 4) return 30
@@ -10,17 +9,21 @@ export function getMinRecordThreshold(babyAgeWeeks: number): number {
 export function getRecordIndicator(
   log: FoodLogWithInterval,
   records: { day: ProcessedIntervalData[]; night: ProcessedIntervalData[] },
-  schedule: DayNightSchedule
 ): string | null {
   if (!log.intervalMinutes || log.intervalMinutes <= 0) return null
-  const d = new Date(log.timestamp)
-  const isNight = isNightHourWithSchedule(d, schedule)
-  const relevant = isNight ? records.night : records.day
-  if (relevant.length === 0) return null
-  const recordIndex = relevant.findIndex(
+
+  // Search both day and night records — classification is already done upstream
+  const dayIndex = records.day.findIndex(
     (r: ProcessedIntervalData) => r.timestamp === log.timestamp && r.interval === log.intervalMinutes,
   )
-  if (recordIndex === -1) return null
+  const nightIndex = records.night.findIndex(
+    (r: ProcessedIntervalData) => r.timestamp === log.timestamp && r.interval === log.intervalMinutes,
+  )
+
+  if (dayIndex === -1 && nightIndex === -1) return null
+
+  const isNight = nightIndex !== -1
+  const recordIndex = isNight ? nightIndex : dayIndex
   const timeEmoji = isNight ? "🌙" : "☀️"
   const rankEmoji = ["🥇", "🥈", "🥉"][recordIndex] || ""
   return timeEmoji + rankEmoji

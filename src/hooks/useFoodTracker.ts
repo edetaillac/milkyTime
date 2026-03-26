@@ -23,14 +23,13 @@ import {
   getMinRecordThreshold,
   calculateBabyAgeWeeksFromBirthDate,
   formatBabyAgeFromBirthDate,
-  isNightHour,
   TIMINGS,
 } from "../lib"
 
 interface WindowWithConfetti extends Window {
   confetti?: (options: Record<string, unknown>) => void
 }
-import { getScheduleForAge, isNightHourWithSchedule, type DayNightSchedule } from "../lib/scheduleConfig"
+import { getScheduleForAge, isNightHourWithSchedule, isNightIntervalByMajority, type DayNightSchedule } from "../lib/scheduleConfig"
 import { addLogEntry, updateLogTimestamp, deleteLogEntry } from "../lib/supabase"
 import {
   fetchLogsWithOptions as fetchLogsWithOptionsService,
@@ -520,16 +519,17 @@ export function useFoodTracker() {
       for (let i = 1; i < sorted.length; i++) {
         const cur = sorted[i]
         const prev = sorted[i - 1]
-        const mins = calculateInterval(new Date(cur.timestamp), new Date(prev.timestamp))
+        const prevDate = new Date(prev.timestamp)
+        const curDate = new Date(cur.timestamp)
+        const mins = calculateInterval(curDate, prevDate)
         if (mins < 1 || mins > 1440) continue
-        const d = new Date(cur.timestamp)
-        const isNight = isNightHour(d)
+        const isNight = isNightIntervalByMajority(prevDate, curDate, currentSchedule)
         intervals.push({
           interval: mins,
           isNight,
           timestamp: cur.timestamp,
-          date: formatDate(d, { day: "2-digit", month: "2-digit" }),
-          time: formatTime(d, { hour: "2-digit", minute: "2-digit" }),
+          date: formatDate(curDate, { day: "2-digit", month: "2-digit" }),
+          time: formatTime(curDate, { hour: "2-digit", minute: "2-digit" }),
         })
       }
       
@@ -553,9 +553,8 @@ export function useFoodTracker() {
         const lastFeedingTimestamp = recentFeedings[1].timestamp
         const currentInterval = calculateInterval(new Date(newFeedingTimestamp), new Date(lastFeedingTimestamp))
 
-        // 2. Déterminer si c'est jour ou nuit
-        const newFeedingTime = new Date(newFeedingTimestamp)
-        const isNight = isNightHour(newFeedingTime)
+        // 2. Déterminer si c'est jour ou nuit (par majorité de l'intervalle)
+        const isNight = isNightIntervalByMajority(new Date(lastFeedingTimestamp), new Date(newFeedingTimestamp), currentSchedule)
         
         // 3. Utiliser les records fraîchement calculés
         const existingRecords = isNight ? newNight : newDay
@@ -629,7 +628,8 @@ export function useFoodTracker() {
   const checkApproachingRecord = async () => {
     if (timeSinceLast === null || timeSinceLast <= 0) return setApproachingRecord(null)
     const now = new Date()
-    const isNight = isNightHour(now)
+    const lastFeedingDate = logs.length > 0 ? new Date(logs[0].timestamp) : now
+    const isNight = isNightIntervalByMajority(lastFeedingDate, now, currentSchedule)
     const relevant = isNight ? records.night : records.day
     if (relevant.length === 0) return setApproachingRecord(null)
     const ranks = ["🥇", "🥈", "🥉"]
@@ -1135,8 +1135,8 @@ export function useFoodTracker() {
 
   // Mémoisation des indicateurs de records
   const getRecordIndicator = useCallback(
-    (log: FoodLogWithInterval) => getRecordIndicatorLib(log, records, currentSchedule),
-    [records, currentSchedule],
+    (log: FoodLogWithInterval) => getRecordIndicatorLib(log, records),
+    [records],
   )
 
   const wasInWindow =
